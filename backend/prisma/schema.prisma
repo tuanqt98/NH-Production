@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── User & Role ─────────────────────────────────────────────
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // admin | manager | worker
+  description String?
+  permissions Json     @default("[]") // JSON array of permission strings
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id            Int              @id @default(autoincrement())
+  username      String           @unique
+  email         String           @unique
+  passwordHash  String           @map("password_hash")
+  fullName      String           @map("full_name")
+  roleId        Int              @map("role_id")
+  isActive      Boolean          @default(true) @map("is_active")
+  avatarUrl     String?          @map("avatar_url")
+  lastLoginAt   DateTime?        @map("last_login_at")
+  departmentId  Int?             @map("department_id")
+  position      String?          // Chức vụ: Trưởng ca, Công nhân, Quản đốc...
+  phone         String?
+  joinDate      DateTime?        @map("join_date")
+  enrollNumber  String?          @unique @map("enroll_number") // ID trên máy chấm công
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  role          Role             @relation(fields: [roleId], references: [id])
+  department    Department?      @relation(fields: [departmentId], references: [id])
+  refreshTokens RefreshToken[]
+  productionLogs ProductionLog[]
+  auditLogs      AuditLog[]
+  stockTransactions StockTransaction[]
+  attendances    Attendance[]
+
+  @@index([roleId])
+  @@index([departmentId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ─── Master Data ─────────────────────────────────────────────
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  orders    ProductionOrder[]
+  templates OperationTemplate[]
+
+  @@map("products")
+}
+
+model OperationTemplate {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  name      String
+  sequence  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, sequence])
+  @@map("operation_templates")
+}
+
+// ─── Production ──────────────────────────────────────────────
+
+enum OrderStatus {
+  DRAFT
+  QUOTING
+  DESIGNING
+  TECHNICAL_READY
+  GOLD_ORDER
+  PLANNING
+  PURCHASING
+  READY_TO_RUN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+model ProductionOrder {
+  id          Int         @id @default(autoincrement())
+  orderCode   String      @unique @map("order_code")
+  productId   Int?        @map("product_id")
+  productCode String      @map("product_code")
+  customer    String
+  plannedQty  Int         @map("planned_qty")
+  dueDate     DateTime    @map("due_date")
+  status      OrderStatus @default(DRAFT)
+  
+  // Dimensions & Specs (Kinh doanh)
+  length      Float?
+  width       Float?
+  height      Float?
+  specs       Json?       // Lưu thông tin kỹ thuật bổ sung
+
+  // Design info (Thiết kế)
+  machineName String?     @map("machine_name")
+  designNote  String?     @map("design_note")
+  
+  // Planning info (Kế hoạch)
+  plannedStart DateTime?  @map("planned_start")
+  plannedEnd   DateTime?  @map("planned_end")
+  planningNote String?    @map("planning_note")
+
+  notes       String?
+  isDeleted   Boolean     @default(false) @map("is_deleted")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  product    Product?     @relation(fields: [productId], references: [id])
+  operations Operation[]
+  stockTransactions StockTransaction[]
+  materialRequirements MaterialRequirement[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([customer])
+  @@index([orderCode])
+  @@index([productId])
+  @@map("production_orders")
+}
+
+enum OperationStatus {
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Operation {
+  id        Int             @id @default(autoincrement())
+  orderId   Int             @map("order_id")
+  name      String          // In, Bế, Cán, Thành phẩm
+  sequence  Int             // order of operation
+  status    OperationStatus @default(WAITING)
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  order          ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productionLogs ProductionLog[]
+  ngRanges       NgRange[]
+
+  @@unique([orderId, sequence])
+  @@index([orderId])
+  @@map("operations")
+}
+
+model ProductionLog {
+  id          Int      @id @default(autoincrement())
+  operationId Int      @map("operation_id")
+  userId      Int      @map("user_id")
+  okQty       Int      @map("ok_qty")
+  ngQty       Int      @map("ng_qty")
+  startTime   DateTime @map("start_time")
+  endTime     DateTime @map("end_time")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  operation Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([operationId, createdAt])
+  @@index([userId])
+  @@map("production_logs")
+}
+
+// ─── NG Tracking ─────────────────────────────────────────────
+
+model NgRange {
+  id          Int      @id @default(autoincrement())
+  operationId Int      @map("operation_id")
+  rangeStart  Int      @map("range_start")
+  rangeEnd    Int      @map("range_end")
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  operation Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@index([operationId])
+  @@index([rangeStart, rangeEnd])
+  @@map("ng_ranges")
+}
+
+// ─── Audit ───────────────────────────────────────────────────
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  action    String   // CREATE | UPDATE | DELETE
+  entity    String   // table name
+  entityId  Int      @map("entity_id")
+  oldData   Json?    @map("old_data")
+  newData   Json?    @map("new_data")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+// ─── Warehouse & Materials ───────────────────────────────────
+
+model Material {
+  id           Int      @id @default(autoincrement())
+  code         String   @unique
+  name         String
+  unit         String   // kg, sheet, roll, piece
+  category     String   // Giấy, Mực, Keo, Bản in
+  minStock     Int      @default(0) @map("min_stock")
+  currentStock Int      @default(0) @map("current_stock")
+  unitPrice    Decimal? @map("unit_price")
+  supplier     String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  transactions StockTransaction[]
+  requirements MaterialRequirement[]
+
+  @@map("materials")
+}
+
+enum TransactionType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+model StockTransaction {
+  id         Int             @id @default(autoincrement())
+  materialId Int             @map("material_id")
+  type       TransactionType
+  quantity   Int
+  orderId    Int?            @map("order_id")
+  reason     String?
+  createdBy  Int             @map("created_by")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  material Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [createdBy], references: [id])
+  order    ProductionOrder? @relation(fields: [orderId], references: [id])
+
+  @@index([materialId])
+  @@index([orderId])
+  @@index([type])
+  @@map("stock_transactions")
+}
+
+model MaterialRequirement {
+  id          Int      @id @default(autoincrement())
+  orderId     Int      @map("order_id")
+  materialId  Int      @map("material_id")
+  requiredQty Int      @map("required_qty")
+  issuedQty   Int      @default(0) @map("issued_qty")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  order    ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  material Material        @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, materialId])
+  @@map("material_requirements")
+}
+
+// ─── HR & Attendance ─────────────────────────────────────────
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  managerId   Int?     @map("manager_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("departments")
+}
+
+model Shift {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Ca sáng, Ca chiều, Ca tối
+  startTime   String   @map("start_time") // "06:00"
+  endTime     String   @map("end_time")   // "14:00"
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  attendances Attendance[]
+
+  @@map("shifts")
+}
+
+model AttendanceMachine {
+  id        Int      @id @default(autoincrement())
+  name      String
+  ip        String
+  port      Int      @default(4370)
+  isActive  Boolean  @default(true)
+  lastSync  DateTime? @map("last_sync")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("attendance_machines")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  LEAVE
+}
+
+model Attendance {
+  id             Int              @id @default(autoincrement())
+  userId         Int              @map("user_id")
+  date           DateTime         @db.Date
+  shiftId        Int?             @map("shift_id")
+  checkIn        DateTime?        @map("check_in")
+  checkOut       DateTime?        @map("check_out")
+  status         AttendanceStatus @default(PRESENT)
+  overtimeHours  Float            @default(0) @map("overtime_hours")
+  note           String?
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift Shift? @relation(fields: [shiftId], references: [id])
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([userId])
+  @@map("attendances")
+}
