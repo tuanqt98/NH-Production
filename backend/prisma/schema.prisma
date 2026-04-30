@@ -101,6 +101,7 @@ model OperationTemplate {
 
 enum OrderStatus {
   DRAFT
+  PENDING
   QUOTING
   DESIGNING
   TECHNICAL_READY

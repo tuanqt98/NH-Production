@@ -96,7 +96,7 @@ import { AuthService } from '../core/services/auth.service';
             }
           </div>
           <button class="btn-logout" (click)="auth.logout()" title="Đăng xuất">
-            🚪
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
           </button>
         </div>
       </aside>
@@ -212,6 +212,13 @@ import { AuthService } from '../core/services/auth.service';
       display: flex;
       align-items: center;
       gap: 12px;
+      transition: all var(--transition-normal);
+    }
+
+    .sidebar.collapsed .sidebar-footer {
+      flex-direction: column;
+      padding: 16px 0;
+      gap: 16px;
     }
 
     .user-info {
@@ -273,15 +280,19 @@ import { AuthService } from '../core/services/auth.service';
     .btn-logout {
       background: none;
       border: none;
-      font-size: 1.2rem;
+      color: #888;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
       padding: 8px;
       border-radius: var(--radius-sm);
-      transition: background var(--transition-fast);
+      transition: all var(--transition-fast);
     }
 
     .btn-logout:hover {
-      background: var(--bg-hover);
+      background: rgba(231, 76, 60, 0.1);
+      color: #e74c3c;
     }
 
     .main-content {

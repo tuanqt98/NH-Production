@@ -7,7 +7,18 @@ import { logger } from '../../config/logger.config';
 export class OrdersController {
     async findAll(req: AuthRequest, res: Response): Promise<void> {
         try {
-            const result = await ordersService.findAll(req.query as any);
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 20;
+            const sortBy = (req.query.sortBy as string) || 'createdAt';
+            const sortOrder = (req.query.sortOrder as 'asc' | 'desc') || 'desc';
+
+            const result = await ordersService.findAll({
+                ...req.query,
+                page,
+                limit,
+                sortBy,
+                sortOrder,
+            } as any);
             sendSuccess(res, result.data, 'Orders retrieved', 200, result.meta);
         } catch (error: any) {
             logger.error('Find orders error:', error);
