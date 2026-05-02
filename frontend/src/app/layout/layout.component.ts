@@ -1,329 +1,198 @@
-import { Component } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
-import { TitleCasePipe } from '@angular/common';
-import { AuthService } from '../core/services/auth.service';
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterModule, Router } from '@angular/router';
+import { ApiService } from '../core/services/api.service';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, TitleCasePipe],
+  imports: [CommonModule, RouterModule],
   template: `
-    <div class="app-layout">
-      <!-- Sidebar -->
-      <aside class="sidebar" [class.collapsed]="sidebarCollapsed">
-        <div class="sidebar-header">
-          <div class="logo" (click)="sidebarCollapsed = !sidebarCollapsed">
-            <span class="logo-icon">NH</span>
-            @if (!sidebarCollapsed) {
-              <span class="logo-text">Production</span>
-            }
-          </div>
+    <div class="app-container" [class.is-home]="isHome">
+      <!-- SIDEBAR -->
+      <aside class="app-sidebar" *ngIf="!isHome">
+        <div class="sidebar-logo">
+          <div class="logo-circle"></div>
+          <span class="logo-text">NH Production</span>
         </div>
-
+        
         <nav class="sidebar-nav">
-          <a routerLink="/dashboard" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">📊</span>
-            @if (!sidebarCollapsed) { <span class="nav-label">Dashboard</span> }
-          </a>
-
-          @if (auth.isAdmin() || auth.isManager()) {
-            <a routerLink="/orders" routerLinkActive="active" class="nav-item">
-              <span class="nav-icon">📋</span>
-              @if (!sidebarCollapsed) { <span class="nav-label">Lệnh SX</span> }
+          <div class="nav-section" *ngFor="let section of menuItems">
+            <div class="section-header">{{section.label}}</div>
+            <a *ngFor="let item of section.children" 
+               [routerLink]="item.route" 
+               routerLinkActive="active"
+               class="nav-link">
+              <span class="nav-icon">{{item.icon}}</span>
+              <span class="nav-label">{{item.name}}</span>
             </a>
-          }
-
-          <a routerLink="/production" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">⚙️</span>
-            @if (!sidebarCollapsed) { <span class="nav-label">Nhập SL</span> }
-          </a>
-
-          @if (auth.isAdmin() || auth.isManager()) {
-            <a routerLink="/admin/master-data" routerLinkActive="active" class="nav-item">
-              <span class="nav-icon">📦</span>
-              @if (!sidebarCollapsed) { <span class="nav-label">Sản phẩm</span> }
-            </a>
-          }
-
-          @if (auth.isAdmin()) {
-            <a routerLink="/admin/users" routerLinkActive="active" class="nav-item">
-              <span class="nav-icon">👥</span>
-              @if (!sidebarCollapsed) { <span class="nav-label">Người dùng</span> }
-            </a>
-          }
-
-          @if (auth.isAdmin() || auth.isManager()) {
-            <a routerLink="/reports" routerLinkActive="active" class="nav-item">
-              <span class="nav-icon">📈</span>
-              @if (!sidebarCollapsed) { <span class="nav-label">Báo cáo</span> }
-            </a>
-
-            <a routerLink="/materials" routerLinkActive="active" class="nav-item">
-              <span class="nav-icon">📦</span>
-              @if (!sidebarCollapsed) { <span class="nav-label">Vật tư & Kho</span> }
-            </a>
-          }
-
-          <a routerLink="/hr" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">📅</span>
-            @if (!sidebarCollapsed) { 
-              <span class="nav-label">{{ auth.isWorker() ? 'Chấm công' : 'Nhân sự' }}</span> 
-            }
-          </a>
-
-          <div class="nav-divider"></div>
-
-          <a routerLink="/account-settings" routerLinkActive="active" class="nav-item">
-            <span class="nav-icon">👤</span>
-            @if (!sidebarCollapsed) { <span class="nav-label">Tài khoản</span> }
-          </a>
+          </div>
         </nav>
 
         <div class="sidebar-footer">
-          <div class="user-info" [routerLink]="['/account-settings']" style="cursor: pointer;">
-            <div class="user-avatar">
-              @if (auth.user()?.avatarUrl) {
-                <img [src]="auth.getFullUrl(auth.user()?.avatarUrl)" alt="Avatar">
-              } @else {
-                <span>{{ getInitials() }}</span>
-              }
-            </div>
-            @if (!sidebarCollapsed) {
-              <div class="user-details">
-                <span class="user-name">{{ auth.user()?.fullName }}</span>
-                <span class="user-role">{{ auth.user()?.role?.name | titlecase }}</span>
-              </div>
-            }
-          </div>
-          <button class="btn-logout" (click)="auth.logout()" title="Đăng xuất">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-          </button>
+           <div class="user-info" (click)="toggleProfile()">
+             <img [src]="'https://ui-avatars.com/api/?name=' + userName + '&background=6366f1&color=fff'" alt="avatar">
+             <div class="user-details">
+               <div class="u-name">{{userName}}</div>
+               <div class="u-role">Administrator</div>
+             </div>
+           </div>
         </div>
       </aside>
 
-      <!-- Main Content -->
-      <main class="main-content">
-        <router-outlet />
-      </main>
+      <!-- MAIN CONTENT -->
+      <div class="main-wrapper">
+        <header class="top-header" *ngIf="!isHome">
+          <div class="header-left">
+            <h1 class="page-title">{{currentModuleName}}</h1>
+          </div>
+          <div class="header-right">
+            <div class="header-search">
+              <input type="text" placeholder="Search anything...">
+            </div>
+            <button class="icon-btn">🔔</button>
+            <button class="icon-btn" (click)="logout()">🚪</button>
+          </div>
+        </header>
+
+        <main class="content-area">
+          <router-outlet></router-outlet>
+        </main>
+      </div>
     </div>
   `,
   styles: [`
-    .app-layout {
-      display: flex;
-      min-height: 100vh;
+    .app-container { display: flex; height: 100vh; background: var(--bg-main); font-family: 'Inter', sans-serif; }
+    
+    /* Sidebar - Ultra Sharp */
+    .app-sidebar { 
+      width: 280px; background: #070b14; color: #fff;
+      display: flex; flex-direction: column; z-index: 100;
+      border-right: 1px solid rgba(255,255,255,0.05);
+      box-shadow: 10px 0 30px rgba(0,0,0,0.5);
     }
+    .sidebar-logo { padding: 32px 24px; display: flex; align-items: center; gap: 14px; }
+    .logo-circle { 
+        width: 36px; height: 36px; background: linear-gradient(135deg, var(--primary), #818cf8); 
+        border-radius: 10px; transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+    .logo-text { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
 
-    .sidebar {
-      width: var(--sidebar-width);
-      background: var(--bg-secondary);
-      border-right: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      transition: width var(--transition-normal);
-      position: fixed;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      z-index: 100;
+    .sidebar-nav { flex: 1; padding: 16px; overflow-y: auto; }
+    .section-header { 
+      font-family: 'Outfit'; font-size: 11px; font-weight: 900; color: var(--primary); 
+      text-transform: uppercase; letter-spacing: 2px;
+      margin: 32px 12px 16px 12px; opacity: 0.8;
     }
+    .nav-link { 
+      display: flex; align-items: center; gap: 14px; padding: 14px 18px;
+      color: #94a3b8; text-decoration: none; border-radius: 16px;
+      font-size: 14px; font-weight: 600; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      margin-bottom: 6px;
+    }
+    .nav-link:hover { background: rgba(255,255,255,0.05); color: #fff; transform: translateX(4px); }
+    .nav-link.active { background: var(--primary); color: #fff; box-shadow: 0 8px 16px rgba(99, 102, 241, 0.4); }
+    .nav-icon { font-size: 20px; }
 
-    .sidebar.collapsed {
-      width: 72px;
+    .sidebar-footer { padding: 24px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.2); }
+    .user-info { 
+      display: flex; align-items: center; gap: 12px; padding: 10px;
+      border-radius: 14px; cursor: pointer; transition: all 0.2s;
     }
+    .user-info:hover { background: rgba(255,255,255,0.05); }
+    .user-info img { width: 44px; height: 44px; border-radius: 14px; border: 2px solid rgba(255,255,255,0.1); }
+    .u-name { font-size: 15px; font-weight: 700; color: #fff; }
+    .u-role { font-size: 12px; color: #64748b; font-weight: 500; }
 
-    .sidebar-header {
-      padding: 20px;
-      border-bottom: 1px solid var(--border-color);
+    /* Main Wrapper - Immersive Glass */
+    .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    
+    .top-header { 
+      height: 90px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center;
+      background: rgba(10, 15, 29, 0.6); backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 90;
     }
+    .page-title { font-family: 'Outfit'; font-size: 28px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    
+    .header-right { display: flex; align-items: center; gap: 20px; }
+    .header-search input { 
+      background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255, 255, 255, 0.08); 
+      padding: 12px 24px; border-radius: 14px; width: 320px; font-size: 14px; outline: none;
+      color: #fff; transition: all 0.3s;
+    }
+    .header-search input:focus { border-color: var(--primary); background: rgba(255,255,255,0.1); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2); }
+    
+    .icon-btn { 
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); 
+      width: 48px; height: 48px; border-radius: 14px; cursor: pointer; color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+      transition: all 0.2s;
+    }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-2px); border-color: rgba(255,255,255,0.3); }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      cursor: pointer;
-    }
+    .content-area { flex: 1; overflow-y: auto; padding: 40px; }
 
-    .logo-icon {
-      width: 36px;
-      height: 36px;
-      background: var(--accent-gradient);
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 0.9rem;
-      color: white;
-      flex-shrink: 0;
-    }
-
-    .logo-text {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text-bright);
-      white-space: nowrap;
-    }
-
-    .sidebar-nav {
-      flex: 1;
-      padding: 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 14px;
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
-      transition: all var(--transition-fast);
-      text-decoration: none;
-    }
-
-    .nav-item:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-
-    .nav-item.active {
-      background: var(--bg-active);
-      color: var(--text-bright);
-    }
-
-    .nav-icon {
-      font-size: 1.2rem;
-      width: 24px;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .nav-label {
-      font-size: 0.9rem;
-      font-weight: 500;
-      white-space: nowrap;
-    }
-
-    .sidebar-footer {
-      padding: 16px;
-      border-top: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      transition: all var(--transition-normal);
-    }
-
-    .sidebar.collapsed .sidebar-footer {
-      flex-direction: column;
-      padding: 16px 0;
-      gap: 16px;
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .user-avatar {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: var(--bg-active);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      font-size: 0.8rem;
-      color: var(--text-bright);
-      flex-shrink: 0;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .user-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .nav-divider {
-      height: 1px;
-      background: rgba(255,255,255,0.05);
-      margin: 8px 14px;
-    }
-
-    .user-details {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .user-name {
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: var(--text-primary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .user-role {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    .btn-logout {
-      background: none;
-      border: none;
-      color: #888;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      padding: 8px;
-      border-radius: var(--radius-sm);
-      transition: all var(--transition-fast);
-    }
-
-    .btn-logout:hover {
-      background: rgba(231, 76, 60, 0.1);
-      color: #e74c3c;
-    }
-
-    .main-content {
-      flex: 1;
-      margin-left: var(--sidebar-width);
-      transition: margin-left var(--transition-normal);
-      min-height: 100vh;
-    }
-
-    .sidebar.collapsed + .main-content,
-    .sidebar.collapsed ~ .main-content {
-      margin-left: 72px;
-    }
-
-    @media (max-width: 768px) {
-      .sidebar {
-        width: 72px;
-      }
-      .main-content {
-        margin-left: 72px;
-      }
-    }
-  `],
+    /* Home Override */
+    .is-home .app-sidebar { display: none; }
+  `]
 })
-export class LayoutComponent {
-  sidebarCollapsed = false;
+export class LayoutComponent implements OnInit {
+  isHome = false;
+  userName = 'Admin';
+  currentModuleName = 'Dashboard';
 
-  constructor(public auth: AuthService) { }
+  menuItems = [
+    {
+      label: 'Business',
+      children: [
+        { name: 'Quotation & Sales', route: '/sales', icon: '💎' },
+        { name: 'Customers', route: '/customers', icon: '🤝' }
+      ]
+    },
+    {
+      label: 'Production',
+      children: [
+        { name: 'Engineering', route: '/design', icon: '⚙️' },
+        { name: 'Planning', route: '/planning', icon: '🎯' }
+      ]
+    },
+    {
+      label: 'System',
+      children: [
+        { name: 'Human Resources', route: '/hr', icon: '👤' },
+        { name: 'Analytics', route: '/reports', icon: '📈' }
+      ]
+    }
+  ];
 
-  getInitials(): string {
-    const name = this.auth.user()?.fullName || '';
-    return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+  constructor(private router: Router, private api: ApiService) {
+    this.router.events.subscribe(() => {
+      this.updateState();
+    });
   }
+
+  ngOnInit() {
+    const user = this.api.getCurrentUser();
+    if (user) this.userName = user.fullName;
+    this.updateState();
+  }
+
+  updateState() {
+    const url = this.router.url;
+    this.isHome = url === '/dashboard' || url === '/';
+    if (url.includes('/sales')) this.currentModuleName = 'Sales & Quotation';
+    else if (url.includes('/customers')) this.currentModuleName = 'Customer Relationship';
+    else if (url.includes('/design')) this.currentModuleName = 'Engineering & Design';
+    else if (url.includes('/planning')) this.currentModuleName = 'Production Planning';
+    else if (url.includes('/hr')) this.currentModuleName = 'Talent Management';
+    else this.currentModuleName = 'System Overview';
+  }
+
+  logout() {
+    this.api.logout().subscribe(() => {
+      this.router.navigate(['/login']);
+    });
+  }
+
+  toggleProfile() {}
 }

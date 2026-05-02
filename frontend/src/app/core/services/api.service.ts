@@ -21,6 +21,19 @@ export class ApiService {
 
     constructor(private http: HttpClient) { }
 
+    getCurrentUser() {
+        try {
+            return JSON.parse(localStorage.getItem('user') || 'null');
+        } catch {
+            return null;
+        }
+    }
+
+    logout(): Observable<any> {
+        localStorage.removeItem('user');
+        return this.http.post(`${this.baseUrl}/auth/logout`, {}, { withCredentials: true });
+    }
+
     // ─── Orders ────────────────────────────────────────────
     getOrders(params?: any): Observable<ApiResponse> {
         let httpParams = new HttpParams();
@@ -48,6 +61,27 @@ export class ApiService {
 
     deleteOrder(id: number): Observable<any> {
         return this.http.delete(`${this.baseUrl}/orders/${id}`, { withCredentials: true });
+    }
+
+    // ─── Workflow ──────────────────────────────────────────
+    workflowTransition(id: number, action: string, note?: string): Observable<ApiResponse> {
+        return this.http.post<ApiResponse>(`${this.baseUrl}/orders/${id}/workflow/${action}`, { note }, { withCredentials: true });
+    }
+
+    updateDesign(id: number, data: any): Observable<ApiResponse> {
+        return this.http.put<ApiResponse>(`${this.baseUrl}/orders/${id}/design`, data, { withCredentials: true });
+    }
+
+    updatePlanning(id: number, data: any): Observable<ApiResponse> {
+        return this.http.put<ApiResponse>(`${this.baseUrl}/orders/${id}/planning`, data, { withCredentials: true });
+    }
+
+    getOrderHistory(id: number): Observable<ApiResponse> {
+        return this.http.get<ApiResponse>(`${this.baseUrl}/orders/${id}/history`, { withCredentials: true });
+    }
+
+    getOrdersByDepartment(view: string): Observable<ApiResponse> {
+        return this.http.get<ApiResponse>(`${this.baseUrl}/orders/department/${view}`, { withCredentials: true });
     }
 
     // ─── Production Logs ──────────────────────────────────
@@ -92,5 +126,45 @@ export class ApiService {
 
     getNgRate(): Observable<ApiResponse> {
         return this.http.get<ApiResponse>(`${this.baseUrl}/dashboard/ng-rate`, { withCredentials: true });
+    }
+
+    // ─── Customers ─────────────────────────────────────────
+    getCustomers(): Observable<ApiResponse> {
+        return this.http.get<ApiResponse>(`${this.baseUrl}/customers`, { withCredentials: true });
+    }
+
+
+
+    importCustomers(file: File): Observable<ApiResponse> {
+        const formData = new FormData();
+        formData.append('file', file);
+        return this.http.post<ApiResponse>(`${this.baseUrl}/customers/import`, formData, { withCredentials: true });
+    }
+
+    createCustomer(data: any): Observable<ApiResponse> {
+        return this.http.post<ApiResponse>(`${this.baseUrl}/customers`, data, { withCredentials: true });
+    }
+
+    getCustomer(id: number): Observable<ApiResponse> {
+        return this.http.get<ApiResponse>(`${this.baseUrl}/customers/${id}`, { withCredentials: true });
+    }
+
+    updateCustomer(id: number, data: any): Observable<ApiResponse> {
+        return this.http.put<ApiResponse>(`${this.baseUrl}/customers/${id}`, data, { withCredentials: true });
+    }
+
+    deleteCustomer(id: number): Observable<any> {
+        return this.http.delete(`${this.baseUrl}/customers/${id}`, { withCredentials: true });
+    }
+
+    bulkDeleteCustomers(ids: number[]): Observable<any> {
+        return this.http.post(`${this.baseUrl}/customers/delete-bulk`, { ids }, { withCredentials: true });
+    }
+
+    searchCustomers(query: string): Observable<ApiResponse> {
+        return this.http.get<ApiResponse>(`${this.baseUrl}/customers/search`, { 
+            params: new HttpParams().set('q', query),
+            withCredentials: true 
+        });
     }
 }

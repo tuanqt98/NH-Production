@@ -46,6 +46,7 @@ model User {
   auditLogs      AuditLog[]
   stockTransactions StockTransaction[]
   attendances    Attendance[]
+  orderHistory   OrderHistory[]
 
   @@index([roleId])
   @@index([departmentId])
@@ -101,18 +102,36 @@ model OperationTemplate {
 
 enum OrderStatus {
   DRAFT
-  PENDING
-  QUOTING
-  DESIGNING
-  TECHNICAL_READY
-  GOLD_ORDER
-  PLANNING
-  PURCHASING
-  READY_TO_RUN
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-  OVERDUE
+  QUOTATION          // Báo giá
+  PRICE_PROPOSAL     // Đề nghị duyệt giá
+  AWAITING_CONFIRM   // Chờ xác nhận
+  CONFIRMED          // Xác nhận đơn ĐH
+  SALES_ORDER        // Đơn bán hàng
+  IN_PROGRESS        // Đang sản xuất
+  COMPLETED          // Hoàn tất sản xuất
+  CANCELLED          // Đã hủy
+  OVERDUE            // Quá hạn
+}
+
+model Customer {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique // KH-001...
+  name            String
+  taxCode         String?  @map("tax_code")
+  phone           String?
+  email           String?
+  address         String?
+  website         String?
+  salesPerson     String?  @map("sales_person")
+  paymentTerms    String?  @map("payment_terms")
+  isCompany       Boolean  @default(true) @map("is_company")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  orders          ProductionOrder[]
+
+  @@map("customers")
 }
 
 model ProductionOrder {
@@ -120,25 +139,59 @@ model ProductionOrder {
   orderCode   String      @unique @map("order_code")
   productId   Int?        @map("product_id")
   productCode String      @map("product_code")
-  customer    String
+  customerId  Int?        @map("customer_id")
+  customer    String      // Keep as string for compatibility/quick entry
   plannedQty  Int         @map("planned_qty")
   dueDate     DateTime    @map("due_date")
   status      OrderStatus @default(DRAFT)
   
-  // Dimensions & Specs (Kinh doanh)
-  length      Float?
-  width       Float?
-  height      Float?
-  specs       Json?       // Lưu thông tin kỹ thuật bổ sung
+  // Basic Info
+  salesAccountant String?     @map("sales_accountant") // Kế toán bán hàng
+  bomType         String?     @map("bom_type")         // Loại BoM
+  machineTarget   String?     @map("machine_target")   // Tên máy (FUJI, ...)
 
-  // Design info (Thiết kế)
-  machineName String?     @map("machine_name")
-  designNote  String?     @map("design_note")
-  
-  // Planning info (Kế hoạch)
-  plannedStart DateTime?  @map("planned_start")
-  plannedEnd   DateTime?  @map("planned_end")
-  planningNote String?    @map("planning_note")
+  // Product Specs (Ảnh 1)
+  productName     String?     @map("product_name")     // Tên sản phẩm (Hiển thị)
+  length          Float?      // Chiều dài (mm)
+  width           Float?      // Chiều rộng (mm)
+  height          Float?      // Độ dày / Cao (mm)
+  printColors     Int?        @map("print_colors")     // Số màu in
+  stepDistance    Float?      @map("step_distance")    // Khoảng cách xông (mm)
+  numItemsPerSet  Int?        @default(1) @map("num_items_per_set") // Số tem/cột
+  specs           Json?       // Lưu thông tin kỹ thuật bổ sung
+
+  // Packaging (Ảnh 1)
+  packingMethod   String?     @map("packing_method")   // Quy cách đóng gói (Cuộn/Tờ)
+  unitPerPack     Int?        @map("unit_per_pack")    // Tờ/Tập hoặc Tem/Tờ
+  unitName        String?     @map("unit_name")        // Đơn vị tính (Tem, Cuộn, Tờ...)
+  packingSpecs    String?     @map("packing_specs")    // Quy cách chi tiết
+
+  // Cost Calculation (Ảnh 1)
+  wastePercent    Float?      @default(0) @map("waste_percent") // % Hao phí NVL
+  mainMatUsage    Float?      @map("main_mat_usage")   // Số m NVL chính định mức
+  subMatUsage     Float?      @map("sub_mat_usage")    // Số m NVL phụ định mức
+  totalMaterialCost Float?    @map("total_material_cost") // Tổng chi phí NVL
+
+  // ─── Workflow Tracking ───
+  createdBy       Int?        @map("created_by")
+  approvedBy      Int?        @map("approved_by")       // TP KD duyệt giá
+  confirmedBy     Int?        @map("confirmed_by")      // TP KD xác nhận đơn
+  approvedDate    DateTime?   @map("approved_date")     // Ngày duyệt giá  (already existed, repurposed)
+  confirmedDate   DateTime?   @map("confirmed_date")    // Ngày xác nhận đơn
+
+  // ─── Design Info (BP Thiết kế) ───
+  designAssignee  Int?        @map("design_assignee")
+  designMachine   String?     @map("design_machine")    // Máy SX được chọn
+  designTools     Json?       @map("design_tools")      // [{name, qty}]
+  designNote      String?     @map("design_note")
+  designDate      DateTime?   @map("design_date")
+
+  // ─── Planning Info (BP Kế hoạch) ───
+  planAssignee    Int?        @map("plan_assignee")
+  plannedStart    DateTime?   @map("planned_start")
+  plannedEnd      DateTime?   @map("planned_end")
+  planningNote    String?     @map("planning_note")
+  planConfirmedAt DateTime?   @map("plan_confirmed_at")
 
   notes       String?
   isDeleted   Boolean     @default(false) @map("is_deleted")
@@ -146,15 +199,18 @@ model ProductionOrder {
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
   product    Product?     @relation(fields: [productId], references: [id])
+  customerRef Customer?   @relation(fields: [customerId], references: [id])
   operations Operation[]
   stockTransactions StockTransaction[]
   materialRequirements MaterialRequirement[]
+  history    OrderHistory[]
 
   @@index([status])
   @@index([dueDate])
   @@index([customer])
   @@index([orderCode])
   @@index([productId])
+  @@index([createdBy])
   @@map("production_orders")
 }
 
@@ -238,6 +294,27 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// ─── Order Workflow History ──────────────────────────────────
+
+model OrderHistory {
+  id          Int      @id @default(autoincrement())
+  orderId     Int      @map("order_id")
+  fromStatus  String   @map("from_status")
+  toStatus    String   @map("to_status")
+  action      String   // submit_price, approve_price, confirm_order, etc.
+  performedBy Int      @map("performed_by")
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  order ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User            @relation(fields: [performedBy], references: [id])
+
+  @@index([orderId])
+  @@index([performedBy])
+  @@map("order_history")
+}
+
 // ─── Warehouse & Materials ───────────────────────────────────
 
 model Material {

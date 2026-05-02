@@ -18,8 +18,17 @@ router.get(
     (req, res) => ordersController.findAll(req, res)
 );
 
+// GET /api/orders/department/:view — MUST be before /:id to avoid conflict
+router.get(
+    '/department/:view',
+    (req, res) => ordersController.getByDepartment(req, res)
+);
+
 // GET /api/orders/:id — detail
 router.get('/:id', (req, res) => ordersController.findById(req, res));
+
+// GET /api/orders/:id/history — workflow history
+router.get('/:id/history', (req, res) => ordersController.getHistory(req, res));
 
 // POST /api/orders — create (admin/manager)
 router.post(
@@ -30,6 +39,12 @@ router.post(
     (req, res) => ordersController.create(req, res)
 );
 
+// POST /api/orders/:id/workflow/:action — transition status
+router.post(
+    '/:id/workflow/:action',
+    (req, res) => ordersController.workflowTransition(req, res)
+);
+
 // PUT /api/orders/:id — update (admin/manager)
 router.put(
     '/:id',
@@ -38,6 +53,12 @@ router.put(
     auditLog('production_orders'),
     (req, res) => ordersController.update(req, res)
 );
+
+// PUT /api/orders/:id/design — update design info (BP Thiết kế)
+router.put('/:id/design', (req, res) => ordersController.updateDesign(req, res));
+
+// PUT /api/orders/:id/planning — update planning info (BP Kế hoạch)
+router.put('/:id/planning', (req, res) => ordersController.updatePlanning(req, res));
 
 // DELETE /api/orders/:id — soft delete (admin only)
 router.delete(

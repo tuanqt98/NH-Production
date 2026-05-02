@@ -52,6 +52,7 @@ export class OrdersService {
                         },
                         orderBy: { sequence: 'asc' },
                     },
+                    materialRequirements: { select: { id: true } },
                 },
                 orderBy: { [query.sortBy]: query.sortOrder },
                 skip: (query.page - 1) * query.limit,
@@ -132,51 +133,78 @@ export class OrdersService {
         return enriched;
     }
 
-    /**
-     * Create order with operations
-     */
     async create(data: {
         orderCode: string;
         productCode: string;
+        productName?: string;
         customer: string;
         plannedQty: number;
         dueDate: string;
-        notes?: string;
+        salesAccountant?: string;
+        bomType?: string;
+        machineTarget?: string;
         length?: number;
         width?: number;
         height?: number;
-        specs?: any;
+        printColors?: number;
+        stepDistance?: number;
+        numItemsPerSet?: number;
+        packingMethod?: string;
+        unitPerPack?: number;
+        unitName?: string;
+        packingSpecs?: string;
+        wastePercent?: number;
+        status?: string;
+        notes?: string;
         operations: { name: string; sequence: number }[];
         materials?: { materialId: number; quantity: number }[];
     }) {
         return prisma.$transaction(async (tx) => {
-            // 1. Tạo đơn hàng + công đoạn
             const order = await tx.productionOrder.create({
                 data: {
                     orderCode: data.orderCode,
                     productCode: data.productCode,
+                    productName: data.productName || null,
                     customer: data.customer,
                     plannedQty: data.plannedQty,
                     dueDate: new Date(data.dueDate),
-                    notes: data.notes,
+                    salesAccountant: data.salesAccountant,
+                    bomType: data.bomType,
+                    machineTarget: data.machineTarget,
                     length: data.length,
                     width: data.width,
                     height: data.height,
-                    specs: data.specs,
-                    status: OrderStatus.DRAFT,
-                    operations: {
-                        create: data.operations.map(op => ({
-                            name: op.name,
-                            sequence: op.sequence,
-                        })),
-                    },
-                },
-                include: {
-                    operations: { orderBy: { sequence: 'asc' } },
+                    printColors: data.printColors,
+                    stepDistance: data.stepDistance,
+                    numItemsPerSet: data.numItemsPerSet,
+                    packingMethod: data.packingMethod,
+                    unitPerPack: data.unitPerPack,
+                    unitName: data.unitName,
+                    packingSpecs: data.packingSpecs,
+                    wastePercent: data.wastePercent || 0,
+                    notes: data.notes,
+                    status: (data.status || 'QUOTATION') as any,
                 },
             });
 
-            // 2. Tạo yêu cầu nguyên vật liệu nếu có
+            // 2. Add default operations if none provided
+            const ops = data.operations && data.operations.length > 0
+                ? data.operations
+                : [
+                    { name: 'In', sequence: 1 },
+                    { name: 'Bế', sequence: 2 },
+                    { name: 'Thành phẩm', sequence: 3 }
+                ];
+
+            await tx.operation.createMany({
+                data: ops.map((op: any) => ({
+                    orderId: order.id,
+                    name: op.name,
+                    sequence: op.sequence,
+                    status: 'WAITING',
+                })),
+            });
+
             if (data.materials && data.materials.length > 0) {
                 await tx.materialRequirement.createMany({
                     data: data.materials.map(m => ({
@@ -187,7 +215,6 @@ export class OrdersService {
                 });
             }
 
-            // 3. Trả về đơn đã tạo kèm material requirements
             return tx.productionOrder.findUnique({
                 where: { id: order.id },
                 include: {
@@ -202,53 +229,83 @@ export class OrdersService {
         });
     }
 
-    /**
-     * Update order (not operations)
-     */
-    async update(id: number, data: Partial<{
-        productCode: string;
-        customer: string;
-        plannedQty: number;
-        dueDate: string;
-        status: OrderStatus;
-        notes: string;
-        length: number;
-        width: number;
-        height: number;
-        specs: any;
-        machineName: string;
-        designNote: string;
-        plannedStart: string;
-        plannedEnd: string;
-        planningNote: string;
-    }>) {
-        const existing = await prisma.productionOrder.findFirst({
-            where: { id, isDeleted: false },
-        });
+    async update(id: number, data: any) {
+        return prisma.$transaction(async (tx) => {
+            const existing = await tx.productionOrder.findFirst({
+                where: { id, isDeleted: false },
+            });
 
-        if (!existing) {
-            throw new Error('Order not found');
-        }
+            if (!existing) {
+                throw new Error('Order not found');
+            }
 
-        const updateData: any = { ...data };
-        if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
-        if (data.plannedStart) updateData.plannedStart = new Date(data.plannedStart);
-        if (data.plannedEnd) updateData.plannedEnd = new Date(data.plannedEnd);
+            // Whitelist: only allow specific fields to prevent injection
+            const ALLOWED_FIELDS = [
+                'productCode', 'productName', 'customer', 'plannedQty',
+                'dueDate', 'salesAccountant', 'bomType', 'machineTarget',
+                'length', 'width', 'height', 'printColors', 'stepDistance',
+                'numItemsPerSet', 'packingMethod', 'unitPerPack', 'unitName',
+                'packingSpecs', 'wastePercent', 'mainMatUsage', 'subMatUsage',
+                'totalMaterialCost', 'notes', 'status', 'plannedStart', 'plannedEnd',
+                'designMachine', 'designNote', 'planningNote',
+            ];
+            const updateData: any = {};
+            for (const key of ALLOWED_FIELDS) {
+                if (data[key] !== undefined) updateData[key] = data[key];
+            }
+            if (updateData.dueDate) updateData.dueDate = new Date(updateData.dueDate);
+            if (updateData.plannedStart) updateData.plannedStart = new Date(updateData.plannedStart);
+            if (updateData.plannedEnd) updateData.plannedEnd = new Date(updateData.plannedEnd);
 
-        // Logic: Khi chuyển sang GOLD_ORDER, có thể trigger auto-create lệnh cho BP Kế hoạch
-        if (data.status === OrderStatus.GOLD_ORDER && existing.status !== OrderStatus.GOLD_ORDER) {
-            // Có thể thêm logic thông báo hoặc tạo task ở đây
-        }
+            // Handle Operations update if provided
+            if (data.operations) {
+                // Simplest way: delete all and recreate
+                await tx.operation.deleteMany({ where: { orderId: id } });
+                updateData.operations = {
+                    create: data.operations.map((op: any) => ({
+                        name: op.name,
+                        sequence: op.sequence,
+                    })),
+                };
+            } else {
+                delete updateData.operations;
+            }
 
-        return prisma.productionOrder.update({
-            where: { id },
-            data: updateData,
-            include: {
-                operations: { orderBy: { sequence: 'asc' } },
-                materialRequirements: {
-                    include: { material: true }
-                }
-            },
+            // Handle Materials update if provided
+            if (data.materials) {
+                await tx.materialRequirement.deleteMany({ where: { orderId: id } });
+                // We'll create them after the update to have the order ID context (though it's same ID)
+            }
+            delete updateData.materials;
+            delete updateData.materialRequirements;
+
+            const updated = await tx.productionOrder.update({
+                where: { id },
+                data: updateData,
+                include: {
+                    operations: { orderBy: { sequence: 'asc' } },
+                },
+            });
+
+            if (data.materials && data.materials.length > 0) {
+                await tx.materialRequirement.createMany({
+                    data: data.materials.map((m: any) => ({
+                        orderId: id,
+                        materialId: m.materialId,
+                        requiredQty: m.quantity,
+                    })),
+                });
+            }
+
+            return tx.productionOrder.findUnique({
+                where: { id },
+                include: {
+                    operations: { orderBy: { sequence: 'asc' } },
+                    materialRequirements: {
+                        include: { material: true }
+                    }
+                },
+            });
         });
     }
 

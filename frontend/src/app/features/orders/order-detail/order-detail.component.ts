@@ -11,266 +11,353 @@ import { MaterialsService } from '../../../core/services/materials.service';
     selector: 'app-order-detail',
     standalone: true,
     imports: [CommonModule, RouterLink, FormsModule],
-    template: `
-    <div class="page-wrapper">
+  template: `
+    <div class="page-wrapper detail-page">
       @if (loading()) {
-        <div style="display:flex;justify-content:center;padding:80px;">
+        <div class="loader-wrap">
           <div class="loading-spinner"></div>
         </div>
       } @else if (order()) {
-        <div class="page-header">
-          <div>
-            <a routerLink="/orders" class="back-link">← Quay lại</a>
-            <h1 class="page-title">{{ order()!.orderCode }}</h1>
-            <p class="page-subtitle">{{ order()!.customer }} · {{ order()!.productCode }}</p>
+        <!-- ODOO HEADER BAR -->
+        <div class="odoo-status-bar">
+          <div class="action-buttons">
+            <button class="btn btn-primary" (click)="workflowAction('submit_price')" *ngIf="order()!.status === 'QUOTATION'">Gửi duyệt giá</button>
+            <button class="btn btn-primary" (click)="workflowAction('approve_price')" *ngIf="order()!.status === 'PRICE_PROPOSAL' && isManager()">Duyệt giá</button>
+            <button class="btn btn-primary" (click)="workflowAction('confirm_order')" *ngIf="order()!.status === 'AWAITING_CONFIRM' && isManager()">Xác nhận đơn hàng</button>
+            <button class="btn btn-primary" (click)="workflowAction('plan_confirm')" *ngIf="order()!.status === 'CONFIRMED' && isManager()">Xác nhận kế hoạch</button>
+            <button class="btn btn-secondary" (click)="updateStatus('CANCELLED')" *ngIf="order()!.status !== 'CANCELLED' && order()!.status !== 'COMPLETED'">Hủy</button>
           </div>
-          <div style="text-align: right;">
-            <span class="badge" [ngClass]="getStatusClass(order()!.status)">
-              {{ getStatusLabel(order()!.status) }}
-            </span>
-            <div *ngIf="order()!.machineName" style="margin-top:8px; font-size:0.8rem; color:#aaa;">
-               Máy: <strong>{{ order()!.machineName }}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-4" style="margin-bottom:24px;">
-          <div class="info-card"><span class="info-label">SL Kế hoạch</span><span class="info-value">{{ order()!.plannedQty | number }}</span></div>
-          <div class="info-card"><span class="info-label">Kích thước</span><span class="info-value" style="font-size:1.1rem">{{ order()!.length || 0 }} x {{ order()!.width || 0 }} x {{ order()!.height || 0 }}</span></div>
-          <div class="info-card"><span class="info-label">SL OK</span><span class="info-value" style="color:var(--status-success)">{{ getTotalOk() | number }}</span></div>
-          <div class="info-card"><span class="info-label">Tỷ lệ NG</span><span class="info-value" style="color:var(--status-error)">{{ getOverallNgRate() }}%</span></div>
-        </div>
-
-        <!-- Workflow Section -->
-        <div class="card workflow-card" style="margin-bottom:24px;">
-          <h3 class="section-title" style="margin-bottom:12px;">Quy trình xử lý đơn hàng</h3>
-          
-          <div class="workflow-steps">
-            <!-- Step 1: Kinh doanh -->
-            <div class="workflow-step" [class.active]="order()!.status === 'DRAFT'">
-              <div class="step-icon">💰</div>
-              <div class="step-content">
-                <div class="step-title">Kinh doanh (Kích thước & NVL)</div>
-                @if (order()!.status === 'DRAFT' && (isAdmin() || isManager())) {
-                   <div class="step-form">
-                     <div class="grid-3">
-                       <input class="form-input" type="number" [(ngModel)]="editData.length" placeholder="Dài">
-                       <input class="form-input" type="number" [(ngModel)]="editData.width" placeholder="Rộng">
-                       <input class="form-input" type="number" [(ngModel)]="editData.height" placeholder="Cao">
-                     </div>
-                     <button class="btn btn-primary btn-sm" (click)="updateStatus('QUOTING')" [disabled]="updating()">Gửi Kế toán báo giá</button>
-                   </div>
-                } @else {
-                  <div class="step-info">KT: {{ order()!.length }}x{{ order()!.width }}x{{ order()!.height }}</div>
-                }
-              </div>
-            </div>
-
-            <!-- Step 2: Kế toán -->
-            <div class="workflow-step" [class.active]="order()!.status === 'QUOTING'">
-              <div class="step-icon">🧾</div>
-              <div class="step-content">
-                <div class="step-title">Kế toán bán hàng (Báo giá)</div>
-                @if (order()!.status === 'QUOTING' && (isAdmin() || isManager())) {
-                   <button class="btn btn-primary btn-sm" (click)="updateStatus('DESIGNING')" [disabled]="updating()">Xác nhận báo giá & Gửi Thiết kế</button>
-                }
-              </div>
-            </div>
-
-            <!-- Step 3: Thiết kế -->
-            <div class="workflow-step" [class.active]="order()!.status === 'DESIGNING'">
-              <div class="step-icon">🎨</div>
-              <div class="step-content">
-                <div class="step-title">Thiết kế (Máy & Kỹ thuật)</div>
-                @if (order()!.status === 'DESIGNING' && (isAdmin() || isManager())) {
-                   <div class="step-form">
-                     <input class="form-input" [(ngModel)]="editData.machineName" placeholder="Tên máy sản xuất">
-                     <textarea class="form-input" [(ngModel)]="editData.designNote" placeholder="Ghi chú kỹ thuật"></textarea>
-                     <button class="btn btn-primary btn-sm" (click)="updateStatus('TECHNICAL_READY')" [disabled]="updating()">Hoàn tất thiết kế</button>
-                   </div>
-                } @else {
-                   <div class="step-info">Máy: {{ order()!.machineName || '-' }}</div>
-                }
-              </div>
-            </div>
-
-             <!-- Step 4: Duyệt GOLD ORDER -->
-             <div class="workflow-step" [class.active]="order()!.status === 'TECHNICAL_READY'">
-              <div class="step-icon">⭐</div>
-              <div class="step-content">
-                <div class="step-title">Duyệt Đơn bán vàng (Kinh doanh)</div>
-                @if (order()!.status === 'TECHNICAL_READY' && (isAdmin() || isManager())) {
-                   <button class="btn btn-success btn-sm" (click)="updateStatus('GOLD_ORDER')" [disabled]="updating()">Duyệt Đơn bán vàng</button>
-                }
-              </div>
-            </div>
-
-            <!-- Step 5: Kế hoạch -->
-            <div class="workflow-step" [class.active]="order()!.status === 'GOLD_ORDER' || order()!.status === 'PLANNING'">
-              <div class="step-icon">📅</div>
-              <div class="step-content">
-                <div class="step-title">Kế hoạch & Vật tư</div>
-                @if ((order()!.status === 'GOLD_ORDER' || order()!.status === 'PLANNING') && (isAdmin() || isManager())) {
-                   <div class="step-form">
-                     <div class="grid-2">
-                       <input class="form-input" type="date" [(ngModel)]="editData.plannedStart" placeholder="Bắt đầu dự kiến">
-                       <input class="form-input" type="date" [(ngModel)]="editData.plannedEnd" placeholder="Kết thúc dự kiến">
-                     </div>
-                     <button class="btn btn-primary btn-sm" (click)="updateStatus('READY_TO_RUN')" [disabled]="updating()">Đủ vật tư & Chuyển Sản xuất</button>
-                   </div>
-                }
-              </div>
-            </div>
+          <div class="workflow-steps-arrow">
+            <div class="step-arrow" [class.active]="order()!.status === 'QUOTATION'">Báo giá</div>
+            <div class="step-arrow" [class.active]="order()!.status === 'PRICE_PROPOSAL'">Đề nghị duyệt giá</div>
+            <div class="step-arrow" [class.active]="order()!.status === 'AWAITING_CONFIRM'">Chờ xác nhận (TK)</div>
+            <div class="step-arrow" [class.active]="order()!.status === 'SALES_ORDER' || order()!.status === 'CONFIRMED'">Đơn bán hàng</div>
+            <div class="step-arrow" [class.active]="order()!.status === 'IN_PROGRESS'">Đang SX</div>
+            <div class="step-arrow" [class.active]="order()!.status === 'COMPLETED'">Hoàn tất</div>
           </div>
         </div>
 
-        <div class="grid-2">
-           <!-- Section: Technical Specs (KD) -->
-           <div class="card" style="padding:20px;">
-             <h3 class="section-title">📏 Thông số kỹ thuật (KD)</h3>
-             <div class="step-form" style="background:none; padding:0;">
-                <div class="grid-3" style="margin-bottom:12px;">
-                  <div class="form-group">
-                    <label class="form-label">Dài</label>
-                    <input class="form-input" type="number" [(ngModel)]="editData.length">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Rộng</label>
-                    <input class="form-input" type="number" [(ngModel)]="editData.width">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Cao</label>
-                    <input class="form-input" type="number" [(ngModel)]="editData.height">
-                  </div>
-                </div>
-                <button class="btn btn-ghost btn-sm" (click)="saveDraft()" [disabled]="updating()">Lưu thông số</button>
-             </div>
-           </div>
+        <div class="detail-container card">
+          <!-- TOP STATS BUTTONS -->
+          <div class="stats-header-buttons">
+            <button class="stat-btn" [class.has-data]="order()!.materialRequirements?.length > 0">
+                <div class="stat-icon">🧱</div>
+                <div class="stat-label">Vật tư</div>
+            </button>
+            <button class="stat-btn">
+                <div class="stat-icon">🕒</div>
+                <div class="stat-label">{{ history().length }} Lịch sử</div>
+            </button>
+          </div>
 
-           <!-- Section: Design (Thiết kế) -->
-           <div class="card" style="padding:20px;">
-             <h3 class="section-title">🎨 Thiết kế & Máy móc</h3>
-             <div class="step-form" style="background:none; padding:0;">
-                <div class="form-group" style="margin-bottom:12px;">
-                  <label class="form-label">Máy sản xuất</label>
-                  <input class="form-input" [(ngModel)]="editData.machineName" placeholder="Chọn máy...">
-                </div>
-                <div class="form-group" style="margin-bottom:12px;">
-                  <label class="form-label">Ghi chú kỹ thuật</label>
-                  <textarea class="form-input" [(ngModel)]="editData.designNote" rows="2"></textarea>
-                </div>
-                <button class="btn btn-ghost btn-sm" (click)="saveDraft()" [disabled]="updating()">Lưu thông tin thiết kế</button>
-             </div>
-           </div>
-        </div>
+          <!-- MAIN CONTENT -->
+          <div class="order-header-main">
+            <h1 class="order-title">{{ order()!.orderCode }}</h1>
+            <div class="customer-tag">👤 {{ order()!.customer }}</div>
+            <div class="status-indicator mt-2">
+                <span class="status-badge" [class]="'status-' + order()!.status">
+                    {{ getStatusLabel(order()!.status) }}
+                </span>
+            </div>
+          </div>
 
-        <h2 class="section-title" style="margin-top:24px;">Công đoạn sản xuất</h2>
-        <div class="operations-list">
-          @for (op of order()!.operations; track op.id) {
-            <div class="operation-card" [class.expanded]="expandedOp === op.id">
-              <div class="op-header" (click)="expandedOp = expandedOp === op.id ? null : op.id">
-                <div class="op-sequence">{{ op.sequence }}</div>
-                <div class="op-info">
-                  <span class="op-name">{{ op.name }}</span>
-                  <span class="op-stats">OK: {{ op.aggregate?.totalOk || 0 }} · NG: {{ op.aggregate?.totalNg || 0 }}</span>
-                </div>
-                <span class="badge" [ngClass]="getOpStatusClass(op.status)">{{ op.status }}</span>
-                <span class="op-expand">{{ expandedOp === op.id ? '▼' : '▶' }}</span>
-              </div>
-              @if (expandedOp === op.id) {
-                <div class="op-detail animate-fade-in">
-                  <div class="progress-bar-container">
-                    <div class="progress-bar" [style.width.%]="getOpProgress(op)">{{ getOpProgress(op) | number:'1.0-0' }}%</div>
-                  </div>
-                  @if (op.productionLogs?.length > 0) {
-                    <h4 style="margin:16px 0 8px;color:var(--text-secondary);">Nhật ký sản xuất</h4>
-                    <table class="data-table">
-                      <thead><tr><th>Nhân viên</th><th>OK</th><th>NG</th><th>Bắt đầu</th><th>Kết thúc</th></tr></thead>
-                      <tbody>
-                        @for (log of op.productionLogs; track log.id) {
-                          <tr>
-                            <td>{{ log.user?.fullName }}</td>
-                            <td style="color:var(--status-success)">{{ log.okQty | number }}</td>
-                            <td style="color:var(--status-error)">{{ log.ngQty | number }}</td>
-                            <td>{{ log.startTime | date:'HH:mm dd/MM' }}</td>
-                            <td>{{ log.endTime | date:'HH:mm dd/MM' }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  } @else {
-                    <p style="text-align:center;color:var(--text-secondary);padding:20px;">Chưa có log</p>
-                  }
-                  @if (op.ngRanges?.length > 0) {
-                    <h4 style="margin:16px 0 8px;color:var(--text-secondary);">Dải số NG</h4>
-                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                      @for (r of op.ngRanges; track r.id) {
-                        <span class="ng-tag">{{ r.rangeStart }}-{{ r.rangeEnd }} @if(r.reason){({{ r.reason }})}</span>
-                      }
+          <div class="grid-2 mt-6">
+            <div class="info-column">
+                <div class="data-row">
+                    <label>Sản phẩm</label>
+                    <div class="value-box">
+                        <span class="p-code">[{{ order()!.productCode }}]</span>
+                        <span class="p-name">{{ order()!.productName || 'Chưa đặt tên' }}</span>
                     </div>
-                  }
                 </div>
-              }
+                <div class="data-row">
+                    <label>Số lượng</label>
+                    <div class="value-box">
+                        <strong>{{ order()!.plannedQty | number }}</strong>
+                        <small>{{ order()!.unitName || 'Cái' }}</small>
+                    </div>
+                </div>
+                <div class="data-row">
+                    <label>Thông số KT</label>
+                    <div class="value-box">
+                        {{ order()!.length }}x{{ order()!.width }}x{{ order()!.height }} mm | {{ order()!.printColors }} màu
+                    </div>
+                </div>
+                <div class="data-row" *ngIf="order()!.designMachine">
+                    <label>Máy thiết kế</label>
+                    <div class="value-box">
+                        <span class="machine-pill">{{ order()!.designMachine }}</span>
+                    </div>
+                </div>
             </div>
-          }
+
+            <div class="info-column">
+                <div class="data-row">
+                    <label>Ngày giao hàng</label>
+                    <div class="value-box highlight-date">{{ order()!.dueDate | date:'dd/MM/yyyy' }}</div>
+                </div>
+                <div class="data-row">
+                    <label>Người phụ trách</label>
+                    <div class="value-box">{{ order()!.salesAccountant || '---' }}</div>
+                </div>
+                <div class="data-row" *ngIf="order()!.plannedStart">
+                    <label>Ngày kế hoạch</label>
+                    <div class="value-box">
+                        {{ order()!.plannedStart | date:'dd/MM' }} → {{ order()!.plannedEnd | date:'dd/MM' }}
+                    </div>
+                </div>
+                <div class="data-row">
+                    <label>Loại BoM</label>
+                    <div class="value-box">{{ order()!.bomType || 'Mặc định' }}</div>
+                </div>
+            </div>
+          </div>
+
+          <!-- Tabs Section -->
+          <div class="detail-tabs mt-8">
+            <div class="tab-header">
+                <button [class.active]="activeTab === 'lines'" (click)="activeTab = 'lines'">Dòng lệnh</button>
+                <button [class.active]="activeTab === 'technical'" (click)="activeTab = 'technical'">Thông tin Kỹ thuật</button>
+                <button [class.active]="activeTab === 'history'" (click)="activeTab = 'history'">Lịch sử Workflow</button>
+            </div>
+
+            <!-- TAB: LINES -->
+            <div class="tab-panel" *ngIf="activeTab === 'lines'">
+                <table class="odoo-table">
+                    <thead>
+                        <tr>
+                            <th>Mô tả</th>
+                            <th class="text-right">Số lượng</th>
+                            <th class="text-right">Đơn giá</th>
+                            <th class="text-right">Thuế</th>
+                            <th class="text-right">Thành tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <strong>{{ order()!.productName || order()!.productCode }}</strong><br>
+                                <small class="text-muted">KT: {{ order()!.length }}x{{ order()!.width }}mm | Màu: {{ order()!.printColors }}</small>
+                            </td>
+                            <td class="text-right">{{ order()!.plannedQty | number }}</td>
+                            <td class="text-right">---</td>
+                            <td class="text-right">8%</td>
+                            <td class="text-right font-bold">{{ (order()!.totalMaterialCost || 0) | number }} đ</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- TAB: TECHNICAL -->
+            <div class="tab-panel" *ngIf="activeTab === 'technical'">
+                <div class="tech-grid">
+                    <div class="tech-card">
+                        <h4>🎨 Thiết kế & Công cụ</h4>
+                        <p><strong>Máy SX:</strong> {{ order()!.designMachine || 'Chưa chọn' }}</p>
+                        <p><strong>Ngày thiết kế:</strong> {{ (order()!.designDate | date:'short') || '—' }}</p>
+                        <p><strong>Ghi chú:</strong> {{ order()!.designNote || 'Không có' }}</p>
+                        <div class="tools-list" *ngIf="order()!.designTools">
+                            <strong>CCDC:</strong>
+                            <ul>
+                                <li *ngFor="let t of parseTools(order()!.designTools)">{{ t.name }} (SL: {{ t.qty }})</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="tech-card">
+                        <h4>📅 Kế hoạch</h4>
+                        <p><strong>Dự kiến BĐ:</strong> {{ (order()!.plannedStart | date:'dd/MM/yyyy') || '—' }}</p>
+                        <p><strong>Dự kiến KT:</strong> {{ (order()!.plannedEnd | date:'dd/MM/yyyy') || '—' }}</p>
+                        <p><strong>Ghi chú:</strong> {{ order()!.planningNote || 'Không có' }}</p>
+                        <p><strong>Ngày xác nhận:</strong> {{ (order()!.planConfirmedAt | date:'short') || '—' }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: HISTORY -->
+            <div class="tab-panel" *ngIf="activeTab === 'history'">
+                <div class="history-timeline">
+                    <div class="timeline-item" *ngFor="let h of history()">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-content">
+                            <div class="timeline-header">
+                                <span class="time">{{ h.createdAt | date:'short' }}</span>
+                                <span class="user">👤 {{ h.user?.fullName }}</span>
+                            </div>
+                            <div class="timeline-body">
+                                <span class="action-tag">{{ getActionLabel(h.action) }}</span>
+                                <span class="status-flow">{{ h.fromStatus }} ➔ {{ h.toStatus }}</span>
+                                <p class="note" *ngIf="h.note">{{ h.note }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+          </div>
         </div>
+
+        <!-- ACTIVITY LOG (Odoo Style) -->
+        <div class="activity-log card mt-6">
+            <h3 class="section-title">💬 Hoạt động & Ghi chú</h3>
+            <div class="log-entry" *ngIf="order()!.notes">
+                <div class="log-avatar">👤</div>
+                <div class="log-content">
+                    <div class="log-header">
+                        <strong>Hệ thống</strong> · <span>{{ order()!.createdAt | date:'short' }}</span>
+                    </div>
+                    <div class="log-body">{{ order()!.notes }}</div>
+                </div>
+            </div>
+            <div class="empty-log" *ngIf="!order()!.notes">Chưa có hoạt động nào được ghi lại.</div>
+        </div>
+
       } @else {
-        <p style="text-align:center;padding:80px;color:var(--text-secondary);">Không tìm thấy lệnh</p>
+        <div class="error-state">
+            <h2>404</h2>
+            <p>Không tìm thấy đơn hàng yêu cầu.</p>
+            <button routerLink="/orders" class="btn btn-primary">Quay lại danh sách</button>
+        </div>
       }
     </div>
   `,
-    styles: [`
-    .back-link { font-size:0.85rem; color:var(--text-secondary); display:inline-block; margin-bottom:8px; }
-    .back-link:hover { color:var(--text-primary); }
-    .info-card { background:var(--bg-surface); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; display:flex; flex-direction:column; gap:6px; }
-    .info-label { font-size:0.8rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; }
-    .info-value { font-size:1.4rem; font-weight:700; color:var(--text-bright); }
-    .section-title { font-size:1.2rem; font-weight:600; color:var(--text-bright); margin-bottom:16px; }
-    .operations-list { display:flex; flex-direction:column; gap:12px; }
-    .operation-card { background:var(--bg-surface); border:1px solid var(--border-color); border-radius:var(--radius-md); overflow:hidden; }
-    .operation-card:hover,.operation-card.expanded { border-color:var(--border-light); }
-    .op-header { display:flex; align-items:center; gap:16px; padding:18px 20px; cursor:pointer; }
-    .op-header:hover { background:var(--bg-hover); }
-    .op-sequence { width:36px; height:36px; border-radius:50%; background:var(--bg-active); display:flex; align-items:center; justify-content:center; font-weight:700; color:var(--text-bright); }
-    .op-info { flex:1; display:flex; flex-direction:column; }
-    .op-name { font-weight:600; color:var(--text-bright); }
-    .op-stats { font-size:0.8rem; color:var(--text-secondary); margin-top:2px; }
-    .op-expand { color:var(--text-muted); font-size:0.8rem; }
-    .op-detail { padding:0 20px 20px; border-top:1px solid var(--border-color); }
-    .progress-bar-container { width:100%; height:24px; background:var(--bg-secondary); border-radius:12px; overflow:hidden; margin-top:16px; }
-    .progress-bar { height:100%; background:var(--accent-gradient); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:600; color:white; min-width:40px; }
-    .ng-tag { padding:6px 12px; background:rgba(229,9,20,0.1); border:1px solid rgba(229,9,20,0.2); border-radius:var(--radius-sm); font-size:0.8rem; color:var(--status-error); }
-    
-    .workflow-card { padding: 24px; border: 1px solid rgba(81,140,248,0.2); background: rgba(81,140,248,0.05); }
-    .workflow-steps { display: flex; flex-direction: column; gap: 20px; position: relative; }
-    .workflow-steps::before { content: ''; position: absolute; left: 19px; top: 20px; bottom: 20px; width: 2px; background: rgba(255,255,255,0.1); z-index: 0; }
-    .workflow-step { display: flex; gap: 20px; position: relative; z-index: 1; opacity: 0.5; filter: grayscale(1); transition: all 0.3s; }
-    .workflow-step.active { opacity: 1; filter: none; }
-    .step-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-surface); border: 2px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
-    .workflow-step.active .step-icon { border-color: var(--accent-primary); box-shadow: 0 0 15px rgba(81,140,248,0.4); }
-    .step-content { flex: 1; }
-    .step-title { font-weight: 600; color: var(--text-bright); margin-bottom: 8px; }
-    .step-form { display: flex; flex-direction: column; gap: 12px; background: rgba(255,255,255,0.03); padding: 16px; border-radius: 8px; margin-top: 10px; }
-    .step-info { font-size: 0.85rem; color: var(--text-secondary); }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  styles: [`
+    .detail-page { background: #0f0f0f; min-height: 100vh; padding: 20px; }
+    .odoo-status-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #1e1e1e;
+        padding: 8px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #333;
+    }
+    .workflow-steps-arrow { display: flex; gap: 2px; }
+    .step-arrow {
+        padding: 6px 20px;
+        background: #252525;
+        color: #888;
+        font-size: 0.75rem;
+        font-weight: 600;
+        clip-path: polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%, 10% 50%);
+        transition: all 0.3s;
+    }
+    .step-arrow.active { background: #3498db; color: white; }
+    .step-arrow:first-child { clip-path: polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%); border-radius: 4px 0 0 4px; }
+    .step-arrow:last-child { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 10% 50%); border-radius: 0 4px 4px 0; }
+
+    .detail-container { padding: 30px; position: relative; }
+    .stats-header-buttons {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+    }
+    .stat-btn {
+        background: #252525;
+        border: 1px solid #333;
+        color: #ccc;
+        padding: 10px 15px;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        min-width: 100px;
+    }
+    .stat-btn:hover { background: #333; border-color: var(--accent-primary); }
+    .stat-btn.has-data { border-color: #2ecc71; color: #2ecc71; }
+    .stat-icon { font-size: 1.2rem; }
+    .stat-label { font-size: 0.65rem; text-transform: uppercase; font-weight: 700; }
+
+    .order-header-main { margin-bottom: 30px; }
+    .order-title { font-size: 2rem; color: var(--accent-primary); margin-bottom: 8px; }
+    .customer-tag { font-size: 1.1rem; color: #ccc; font-weight: 500; }
+
+    .info-column { display: flex; flex-direction: column; gap: 15px; }
+    .data-row { display: grid; grid-template-columns: 140px 1fr; align-items: center; }
+    .data-row label { color: #888; font-size: 0.85rem; font-weight: 600; }
+    .value-box { color: #eee; font-size: 0.95rem; }
+    .p-code { color: var(--accent-primary); margin-right: 8px; font-weight: 700; }
+    .machine-pill { background: #2c3e50; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; }
+    .highlight-date { color: #e67e22; font-weight: 700; }
+
+    .detail-tabs { border-top: 1px solid #333; }
+    .tab-header { display: flex; gap: 30px; margin-bottom: 20px; }
+    .tab-header button {
+        background: none;
+        border: none;
+        color: #888;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 15px 0;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+    }
+    .tab-header button.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+
+    .odoo-table { width: 100%; border-collapse: collapse; }
+    .odoo-table th { text-align: left; padding: 12px; color: #888; border-bottom: 2px solid #333; font-size: 0.8rem; text-transform: uppercase; }
+    .odoo-table td { padding: 15px 12px; border-bottom: 1px solid #252525; font-size: 0.9rem; }
+    .text-right { text-align: right; }
+    .font-bold { font-weight: 700; }
+
+    .order-summary-footer {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        margin-top: 30px;
+        gap: 10px;
+    }
+    .summary-line { display: grid; grid-template-columns: 120px 150px; text-align: right; }
+    .summary-line label { color: #888; }
+    .summary-line.total { font-size: 1.4rem; color: #2ecc71; font-weight: 700; margin-top: 10px; border-top: 1px solid #333; padding-top: 10px; }
+
+    .tech-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
+    .tech-card { background: #1a1a1a; padding: 20px; border-radius: 12px; border: 1px solid #333; }
+    .tech-card h4 { margin-top: 0; color: var(--accent-primary); margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    .tech-card p { margin: 8px 0; font-size: 0.9rem; color: #ccc; }
+    .tools-list { margin-top: 15px; padding-top: 10px; border-top: 1px dashed #333; }
+    .tools-list ul { margin: 5px 0 0 20px; padding: 0; font-size: 0.85rem; color: #aaa; }
+
+    .history-timeline { padding: 10px 0; }
+    .timeline-item { position: relative; padding-left: 30px; margin-bottom: 20px; }
+    .timeline-dot { position: absolute; left: 0; top: 5px; width: 12px; height: 12px; background: #3498db; border-radius: 50%; border: 3px solid #1a1a1a; }
+    .timeline-item::before { content: ''; position: absolute; left: 5px; top: 17px; width: 2px; height: calc(100% + 8px); background: #333; }
+    .timeline-item:last-child::before { display: none; }
+    .timeline-content { background: #1e1e1e; padding: 12px 15px; border-radius: 8px; border: 1px solid #333; }
+    .timeline-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.75rem; color: #888; }
+    .action-tag { background: #333; color: #eee; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; margin-right: 10px; text-transform: uppercase; }
+    .status-flow { font-size: 0.8rem; color: #5dade2; font-weight: 600; }
+    .timeline-body .note { margin-top: 8px; font-size: 0.85rem; color: #999; font-style: italic; background: #161616; padding: 8px; border-radius: 4px; }
+
+    .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+    .status-QUOTATION { background: #3498db; color: white; }
+    .status-PRICE_PROPOSAL { background: #f39c12; color: white; }
+    .status-AWAITING_CONFIRM { background: #9b59b6; color: white; }
+    .status-SALES_ORDER { background: #2ecc71; color: white; }
+    .status-CONFIRMED { background: #27ae60; color: white; }
+    .status-IN_PROGRESS { background: #34495e; color: white; }
+    .status-COMPLETED { background: #16a085; color: white; }
   `],
 })
 export class OrderDetailComponent implements OnInit {
     order = signal<any>(null);
+    history = signal<any[]>([]);
     loading = signal(true);
     updating = signal(false);
-    expandedOp: number | null = null;
+    activeTab = 'lines';
     
-    editData: any = {};
-
     private auth = inject(AuthService);
     isAdmin = this.auth.isAdmin;
     isManager = this.auth.isManager;
 
-    constructor(private route: ActivatedRoute, private api: ApiService, private toast: ToastService) { }
+    constructor(private route: ActivatedRoute, private api: ApiService, public toast: ToastService) { }
 
     ngOnInit(): void {
         this.loadOrder();
+        this.loadHistory();
     }
 
     loadOrder() {
@@ -279,15 +366,6 @@ export class OrderDetailComponent implements OnInit {
             next: (res: ApiResponse) => {
                 if (res.success) {
                     this.order.set(res.data);
-                    this.editData = { 
-                        length: res.data.length,
-                        width: res.data.width,
-                        height: res.data.height,
-                        machineName: res.data.machineName,
-                        designNote: res.data.designNote,
-                        plannedStart: res.data.plannedStart?.split('T')[0],
-                        plannedEnd: res.data.plannedEnd?.split('T')[0],
-                    };
                 }
                 this.loading.set(false);
             },
@@ -295,16 +373,40 @@ export class OrderDetailComponent implements OnInit {
         });
     }
 
-    saveDraft() {
+    loadHistory() {
+        const id = parseInt(this.route.snapshot.paramMap.get('id')!);
+        this.api.getOrderHistory(id).subscribe({
+            next: (res: ApiResponse) => {
+                if (res.success) {
+                    this.history.set(res.data);
+                }
+            }
+        });
+    }
+
+    workflowAction(action: string) {
+        if (this.updating()) return;
+        
+        let confirmMsg = 'Bạn có chắc chắn muốn thực hiện thao tác này?';
+        switch (action) {
+            case 'submit_price': confirmMsg = 'Gửi báo giá đi duyệt?'; break;
+            case 'approve_price': confirmMsg = 'Duyệt giá cho đơn hàng này?'; break;
+            case 'confirm_order': confirmMsg = 'Xác nhận đơn hàng và tạo Lệnh SX?'; break;
+            case 'plan_confirm': confirmMsg = 'Xác nhận kế hoạch và chuyển sản xuất?'; break;
+        }
+
+        if (!confirm(confirmMsg)) return;
+
         this.updating.set(true);
-        this.api.updateOrder(this.order().id, this.editData).subscribe({
+        this.api.workflowTransition(this.order().id, action).subscribe({
             next: () => {
-                this.toast.success('Đã lưu thông tin');
+                this.toast.success('Thao tác thành công');
                 this.loadOrder();
+                this.loadHistory();
                 this.updating.set(false);
             },
             error: (err) => {
-                this.toast.error(err.error?.message || 'Lỗi lưu thông tin');
+                this.toast.error(err.error?.message || 'Lỗi thực hiện thao tác');
                 this.updating.set(false);
             }
         });
@@ -312,11 +414,11 @@ export class OrderDetailComponent implements OnInit {
 
     updateStatus(newStatus: string) {
         this.updating.set(true);
-        const data = { ...this.editData, status: newStatus };
-        this.api.updateOrder(this.order().id, data).subscribe({
+        this.api.updateOrder(this.order().id, { status: newStatus }).subscribe({
             next: () => {
-                this.toast.success('Cập nhật trạng thái thành công');
+                this.toast.success('Cập nhật thành công');
                 this.loadOrder();
+                this.loadHistory();
                 this.updating.set(false);
             },
             error: (err) => {
@@ -326,49 +428,38 @@ export class OrderDetailComponent implements OnInit {
         });
     }
 
-    getTotalOk(): number {
-        return this.order()?.operations?.reduce((s: number, o: any) => s + (o.aggregate?.totalOk || 0), 0) || 0;
+    parseTools(tools: any): any[] {
+        if (!tools) return [];
+        try {
+            return Array.isArray(tools) ? tools : JSON.parse(tools);
+        } catch { return []; }
     }
 
-    getOverallNgRate(): string {
-        const ops = this.order()?.operations || [];
-        const ok = ops.reduce((s: number, o: any) => s + (o.aggregate?.totalOk || 0), 0);
-        const ng = ops.reduce((s: number, o: any) => s + (o.aggregate?.totalNg || 0), 0);
-        return ok + ng > 0 ? ((ng / (ok + ng)) * 100).toFixed(2) : '0.00';
-    }
-
-    getOpProgress(op: any): number {
-        const planned = this.order()?.plannedQty || 1;
-        return Math.min(((op.aggregate?.totalOk || 0) / planned) * 100, 100);
-    }
-
-    getStatusClass(s: string): string { 
-        const map: any = { 
-            DRAFT: 'badge-pending', 
-            QUOTING: 'badge-info', 
-            DESIGNING: 'badge-info', 
-            TECHNICAL_READY: 'badge-success', 
-            GOLD_ORDER: 'badge-warning', 
-            READY_TO_RUN: 'badge-success',
-            IN_PROGRESS: 'badge-info', 
-            COMPLETED: 'badge-success', 
-            CANCELLED: 'badge-error' 
-        };
-        return map[s] || 'badge-pending'; 
-    }
     getStatusLabel(s: string): string { 
         const map: any = { 
             DRAFT: 'Bản thảo', 
-            QUOTING: 'Báo giá', 
-            DESIGNING: 'Thiết kế', 
-            TECHNICAL_READY: 'Kỹ thuật OK', 
-            GOLD_ORDER: 'Đơn bán vàng', 
-            READY_TO_RUN: 'Sẵn sàng SX',
+            QUOTATION: 'Báo giá', 
+            PRICE_PROPOSAL: 'Chờ duyệt giá', 
+            AWAITING_CONFIRM: 'Chờ xác nhận (TK)', 
+            SALES_ORDER: 'Đơn bán hàng', 
+            CONFIRMED: 'Đã xác nhận (KH)',
             IN_PROGRESS: 'Đang SX', 
             COMPLETED: 'Hoàn thành', 
             CANCELLED: 'Đã hủy' 
         };
         return map[s] || s; 
     }
-    getOpStatusClass(s: string): string { return ({ WAITING: 'badge-pending', IN_PROGRESS: 'badge-info', COMPLETED: 'badge-success' } as any)[s] || 'badge-pending'; }
+
+    getActionLabel(a: string): string {
+        const map: any = {
+            create: 'Tạo mới',
+            submit_price: 'Gửi duyệt giá',
+            approve_price: 'Duyệt giá',
+            confirm_order: 'Xác nhận ĐH',
+            plan_confirm: 'Xác nhận KH',
+            auto_generate_production: 'Tự động sinh Lệnh SX',
+            mark_complete: 'Hoàn tất SX'
+        };
+        return map[a] || a;
+    }
 }

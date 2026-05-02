@@ -18,6 +18,7 @@ import reportsRoutes from './modules/reports/reports.routes';
 import materialsRoutes from './modules/materials/materials.routes';
 import stockRoutes from './modules/stock/stock.routes';
 import hrRoutes from './modules/hr/hr.routes';
+import customersRoutes from './modules/customers/customers.routes';
 
 // ─── Initialize Express ──────────────────────────────────────
 const app = express();
@@ -36,6 +37,9 @@ app.use('/uploads', express.static('uploads'));
 
 // ─── Request Logging ─────────────────────────────────────────
 app.use((req, res, next) => {
+    if (req.path.startsWith('/uploads') || req.path === '/api/health') {
+        return next();
+    }
     const start = Date.now();
     res.on('finish', () => {
         const duration = Date.now() - start;
@@ -66,6 +70,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/materials', materialsRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/hr', hrRoutes);
+app.use('/api/customers', customersRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────
 app.use((req, res) => {
@@ -86,6 +91,10 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 // ─── Initialize Socket.io ────────────────────────────────────
 initializeSocket(server);
+
+// ─── Initialize Cron Jobs ────────────────────────────────────
+import { initializeCron } from './config/cron.config';
+initializeCron();
 
 // ─── Start Server ────────────────────────────────────────────
 server.listen(env.PORT, () => {

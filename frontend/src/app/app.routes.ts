@@ -1,6 +1,5 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
-import { roleGuard } from './core/guards/role.guard';
 
 export const routes: Routes = [
     {
@@ -17,54 +16,24 @@ export const routes: Routes = [
                 loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
             },
             {
-                path: 'orders',
-                loadComponent: () => import('./features/orders/orders-list/orders-list.component').then(m => m.OrdersListComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin', 'manager'] },
+                path: 'sales',
+                loadComponent: () => import('./features/sales/sales.component').then(m => m.SalesOdooComponent),
             },
             {
-                path: 'orders/:id',
-                loadComponent: () => import('./features/orders/order-detail/order-detail.component').then(m => m.OrderDetailComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin', 'manager'] },
+                path: 'customers',
+                loadComponent: () => import('./features/customers/customers.component').then(m => m.CustomersComponent),
             },
             {
-                path: 'production',
-                loadComponent: () => import('./features/production/production-input/production-input.component').then(m => m.ProductionInputComponent),
+                path: 'design',
+                loadComponent: () => import('./features/design/design.component').then(m => m.DesignComponent),
             },
             {
-                path: 'account-settings',
-                loadComponent: () => import('./features/account-settings/account-settings.component').then(m => m.AccountSettingsComponent),
-            },
-            {
-                path: 'admin/users',
-                loadComponent: () => import('./features/admin/users/users.component').then(m => m.UsersComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin'] },
-            },
-            {
-                path: 'admin/master-data',
-                loadComponent: () => import('./features/admin/products/products.component').then(m => m.ProductsComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin', 'manager'] },
-            },
-            {
-                path: 'reports',
-                loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin', 'manager'] },
-            },
-            {
-                path: 'materials',
-                loadComponent: () => import('./features/materials/materials.component').then(m => m.MaterialsComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin', 'manager'] },
+                path: 'planning',
+                loadComponent: () => import('./features/planning/planning.component').then(m => m.PlanningComponent),
             },
             {
                 path: 'hr',
                 loadComponent: () => import('./features/hr/hr.component').then(m => m.HrComponent),
-                canActivate: [roleGuard],
-                data: { roles: ['admin', 'manager', 'worker'] },
             },
             {
                 path: '',
