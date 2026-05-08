@@ -12,7 +12,7 @@ import { ApiService } from '../core/services/api.service';
       <!-- SIDEBAR -->
       <aside class="app-sidebar" *ngIf="!isHome">
         <div class="sidebar-logo">
-          <div class="logo-circle"></div>
+          <div class="logo-icon">NH</div>
           <span class="logo-text">NH Production</span>
         </div>
         
@@ -31,7 +31,7 @@ import { ApiService } from '../core/services/api.service';
 
         <div class="sidebar-footer">
            <div class="user-info" (click)="toggleProfile()">
-             <img [src]="'https://ui-avatars.com/api/?name=' + userName + '&background=6366f1&color=fff'" alt="avatar">
+             <div class="user-avatar">{{userInitials}}</div>
              <div class="user-details">
                <div class="u-name">{{userName}}</div>
                <div class="u-role">Administrator</div>
@@ -48,10 +48,11 @@ import { ApiService } from '../core/services/api.service';
           </div>
           <div class="header-right">
             <div class="header-search">
-              <input type="text" placeholder="Search anything...">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="Tìm kiếm...">
             </div>
-            <button class="icon-btn">🔔</button>
-            <button class="icon-btn" (click)="logout()">🚪</button>
+            <button class="icon-btn" title="Thông báo">🔔</button>
+            <button class="icon-btn" (click)="logout()" title="Đăng xuất">🚪</button>
           </div>
         </header>
 
@@ -62,75 +63,92 @@ import { ApiService } from '../core/services/api.service';
     </div>
   `,
   styles: [`
+    /* ─── Container ─────────────────────────────────────── */
     .app-container { display: flex; height: 100vh; background: var(--bg-main); font-family: 'Inter', sans-serif; }
     
-    /* Sidebar - Ultra Sharp */
+    /* ─── Sidebar — Odoo Style ──────────────────────────── */
     .app-sidebar { 
-      width: 280px; background: #070b14; color: #fff;
+      width: 260px; background: #FFFFFF; color: var(--text-main);
       display: flex; flex-direction: column; z-index: 100;
-      border-right: 1px solid rgba(255,255,255,0.05);
-      box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+      border-right: 1px solid var(--border-light);
+      box-shadow: 1px 0 4px rgba(0,0,0,0.04);
     }
-    .sidebar-logo { padding: 32px 24px; display: flex; align-items: center; gap: 14px; }
-    .logo-circle { 
-        width: 36px; height: 36px; background: linear-gradient(135deg, var(--primary), #818cf8); 
-        border-radius: 10px; transform: rotate(-5deg); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-    }
-    .logo-text { font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
 
-    .sidebar-nav { flex: 1; padding: 16px; overflow-y: auto; }
+    .sidebar-logo { 
+      padding: 20px 20px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .logo-icon { 
+      width: 36px; height: 36px; background: var(--primary); color: white;
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; font-family: 'Outfit', sans-serif;
+    }
+    .logo-text { font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 800; color: var(--text-main); }
+
+    .sidebar-nav { flex: 1; padding: 12px; overflow-y: auto; }
     .section-header { 
-      font-family: 'Outfit'; font-size: 11px; font-weight: 900; color: var(--primary); 
-      text-transform: uppercase; letter-spacing: 2px;
-      margin: 32px 12px 16px 12px; opacity: 0.8;
+      font-size: 10px; font-weight: 700; color: var(--text-light); 
+      text-transform: uppercase; letter-spacing: 1.5px;
+      margin: 24px 12px 8px 12px;
     }
     .nav-link { 
-      display: flex; align-items: center; gap: 14px; padding: 14px 18px;
-      color: #94a3b8; text-decoration: none; border-radius: 16px;
-      font-size: 14px; font-weight: 600; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-      margin-bottom: 6px;
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      color: var(--text-muted); text-decoration: none; border-radius: 6px;
+      font-size: 13px; font-weight: 500; transition: all 0.15s ease;
+      margin-bottom: 2px;
     }
-    .nav-link:hover { background: rgba(255,255,255,0.05); color: #fff; transform: translateX(4px); }
-    .nav-link.active { background: var(--primary); color: #fff; box-shadow: 0 8px 16px rgba(99, 102, 241, 0.4); }
-    .nav-icon { font-size: 20px; }
+    .nav-link:hover { background: #F4F6F8; color: var(--text-main); }
+    .nav-link.active { 
+      background: var(--primary-light, #E8F8F9); color: var(--primary); font-weight: 600;
+      border-left: 3px solid var(--primary); margin-left: -3px;
+    }
+    .nav-icon { font-size: 18px; width: 24px; text-align: center; }
 
-    .sidebar-footer { padding: 24px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.2); }
+    .sidebar-footer { padding: 16px; border-top: 1px solid var(--border-light); }
     .user-info { 
-      display: flex; align-items: center; gap: 12px; padding: 10px;
-      border-radius: 14px; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; gap: 10px; padding: 8px;
+      border-radius: 8px; cursor: pointer; transition: all 0.15s;
     }
-    .user-info:hover { background: rgba(255,255,255,0.05); }
-    .user-info img { width: 44px; height: 44px; border-radius: 14px; border: 2px solid rgba(255,255,255,0.1); }
-    .u-name { font-size: 15px; font-weight: 700; color: #fff; }
-    .u-role { font-size: 12px; color: #64748b; font-weight: 500; }
+    .user-info:hover { background: #F4F6F8; }
+    .user-avatar { 
+      width: 36px; height: 36px; border-radius: 50%; 
+      background: var(--primary); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px;
+    }
+    .u-name { font-size: 13px; font-weight: 600; color: var(--text-main); }
+    .u-role { font-size: 11px; color: var(--text-muted); }
 
-    /* Main Wrapper - Immersive Glass */
-    .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+    /* ─── Main Content ──────────────────────────────────── */
+    .main-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     
     .top-header { 
-      height: 90px; padding: 0 40px; display: flex; justify-content: space-between; align-items: center;
-      background: rgba(10, 15, 29, 0.6); backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 90;
+      height: 56px; padding: 0 24px; display: flex; justify-content: space-between; align-items: center;
+      background: #FFFFFF; border-bottom: 1px solid var(--border-light);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04); z-index: 90;
     }
-    .page-title { font-family: 'Outfit'; font-size: 28px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+    .page-title { font-family: 'Outfit'; font-size: 18px; font-weight: 700; color: var(--text-main); }
     
-    .header-right { display: flex; align-items: center; gap: 20px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .header-search { position: relative; }
+    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; }
     .header-search input { 
-      background: rgba(255, 255, 255, 0.05); border: 1.5px solid rgba(255, 255, 255, 0.08); 
-      padding: 12px 24px; border-radius: 14px; width: 320px; font-size: 14px; outline: none;
-      color: #fff; transition: all 0.3s;
+      background: #F4F6F8; border: 1px solid var(--border-light); 
+      padding: 8px 14px 8px 36px; border-radius: 6px; width: 240px; font-size: 13px; outline: none;
+      color: var(--text-main); transition: all 0.2s;
     }
-    .header-search input:focus { border-color: var(--primary); background: rgba(255,255,255,0.1); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2); }
+    .header-search input::placeholder { color: var(--text-light); }
+    .header-search input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(14,154,167,0.1); }
     
     .icon-btn { 
-      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); 
-      width: 48px; height: 48px; border-radius: 14px; cursor: pointer; color: #fff;
-      display: flex; align-items: center; justify-content: center; font-size: 18px;
-      transition: all 0.2s;
+      background: #F4F6F8; border: 1px solid var(--border-light); 
+      width: 36px; height: 36px; border-radius: 6px; cursor: pointer; color: var(--text-muted);
+      display: flex; align-items: center; justify-content: center; font-size: 16px;
+      transition: all 0.15s;
     }
-    .icon-btn:hover { background: rgba(255, 255, 255, 0.1); transform: translateY(-2px); border-color: rgba(255,255,255,0.3); }
+    .icon-btn:hover { background: #E8EAED; color: var(--text-main); border-color: var(--border-hover); }
 
-    .content-area { flex: 1; overflow-y: auto; padding: 40px; }
+    .content-area { flex: 1; overflow-y: auto; background: var(--bg-main); }
 
     /* Home Override */
     .is-home .app-sidebar { display: none; }
@@ -139,28 +157,29 @@ import { ApiService } from '../core/services/api.service';
 export class LayoutComponent implements OnInit {
   isHome = false;
   userName = 'Admin';
+  userInitials = 'AD';
   currentModuleName = 'Dashboard';
 
   menuItems = [
     {
-      label: 'Business',
+      label: 'Kinh doanh',
       children: [
-        { name: 'Quotation & Sales', route: '/sales', icon: '💎' },
-        { name: 'Customers', route: '/customers', icon: '🤝' }
+        { name: 'Báo giá & Bán hàng', route: '/sales', icon: '💎' },
+        { name: 'Khách hàng', route: '/customers', icon: '🤝' }
       ]
     },
     {
-      label: 'Production',
+      label: 'Sản xuất',
       children: [
-        { name: 'Engineering', route: '/design', icon: '⚙️' },
-        { name: 'Planning', route: '/planning', icon: '🎯' }
+        { name: 'Thiết kế', route: '/design', icon: '⚙️' },
+        { name: 'Kế hoạch', route: '/planning', icon: '🎯' }
       ]
     },
     {
-      label: 'System',
+      label: 'Hệ thống',
       children: [
-        { name: 'Human Resources', route: '/hr', icon: '👤' },
-        { name: 'Analytics', route: '/reports', icon: '📈' }
+        { name: 'Nhân sự', route: '/hr', icon: '👤' },
+        { name: 'Báo cáo', route: '/reports', icon: '📈' }
       ]
     }
   ];
@@ -173,19 +192,23 @@ export class LayoutComponent implements OnInit {
 
   ngOnInit() {
     const user = this.api.getCurrentUser();
-    if (user) this.userName = user.fullName;
+    if (user) {
+      this.userName = user.fullName;
+      this.userInitials = user.fullName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+    }
     this.updateState();
   }
 
   updateState() {
     const url = this.router.url;
     this.isHome = url === '/dashboard' || url === '/';
-    if (url.includes('/sales')) this.currentModuleName = 'Sales & Quotation';
-    else if (url.includes('/customers')) this.currentModuleName = 'Customer Relationship';
-    else if (url.includes('/design')) this.currentModuleName = 'Engineering & Design';
-    else if (url.includes('/planning')) this.currentModuleName = 'Production Planning';
-    else if (url.includes('/hr')) this.currentModuleName = 'Talent Management';
-    else this.currentModuleName = 'System Overview';
+    if (url.includes('/sales')) this.currentModuleName = 'Báo giá & Bán hàng';
+    else if (url.includes('/customers')) this.currentModuleName = 'Khách hàng';
+    else if (url.includes('/design')) this.currentModuleName = 'Thiết kế kỹ thuật';
+    else if (url.includes('/planning')) this.currentModuleName = 'Kế hoạch sản xuất';
+    else if (url.includes('/hr')) this.currentModuleName = 'Quản lý nhân sự';
+    else if (url.includes('/reports')) this.currentModuleName = 'Báo cáo & Phân tích';
+    else this.currentModuleName = 'Tổng quan';
   }
 
   logout() {

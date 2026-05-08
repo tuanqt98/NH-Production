@@ -1,45 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&display=swap');
+
 :root {
-  /* Premium Color Palette - More Vibrant */
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --secondary: #10b981;
-  --accent: #f43f5e;
-  --danger: #ef4444;
-  --success: #22c55e;
+  /* Odoo-Inspired Teal Palette */
+  --primary: #0E9AA7;
+  --primary-hover: #0B7D88;
+  --primary-light: #E8F8F9;
+  --primary-rgb: 14, 154, 167;
+  --secondary: #3D5A80;
+  --accent: #F2711C;
+  --danger: #DB2828;
+  --success: #21BA45;
   
-  /* Backgrounds */
-  --bg-main: #0a0f1d;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --sidebar-bg: #0f172a;
+  /* Light Backgrounds */
+  --bg-main: #F0F4F8;
+  --bg-card: #FFFFFF;
+  --sidebar-bg: #FFFFFF;
   
-  /* Glassmorphism - High Definition */
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shine: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+  /* Borders */
+  --border-light: #DEE2E6;
+  --border-hover: #C4CCD4;
   
-  /* Shadows - Sharper & Deeper */
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.2);
-  --shadow-lg: 0 12px 24px rgba(0,0,0,0.3);
-  --shadow-xl: 0 20px 40px rgba(0,0,0,0.4);
-  
-  /* Gradients - Ultra Vibrant */
-  --mesh-gradient: radial-gradient(at 0% 0%, #4338ca 0px, transparent 50%),
-                   radial-gradient(at 50% 0%, #6366f1 0px, transparent 50%),
-                   radial-gradient(at 100% 0%, #d946ef 0px, transparent 50%),
-                   radial-gradient(at 0% 100%, #059669 0px, transparent 50%),
-                   radial-gradient(at 100% 100%, #2563eb 0px, transparent 50%);
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.1);
   
   /* Text */
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-bright: #ffffff;
-  --text-on-dark: #f8fafc;
+  --text-main: #212529;
+  --text-muted: #6C757D;
+  --text-light: #ADB5BD;
   
   /* Spacing & Radii */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 }
 
 * {
@@ -49,7 +43,7 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background-color: var(--bg-main);
   color: var(--text-main);
   line-height: 1.5;
@@ -60,47 +54,29 @@ h1, h2, h3, .module-name {
   font-family: 'Outfit', sans-serif;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 10px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+/* Custom Scrollbar — Light */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C4CCD4; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Utility Classes */
+/* Utility Buttons */
 .btn-premium {
   background: var(--primary);
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 18px;
   border-radius: var(--radius-md);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: var(--shadow-sm);
+  gap: 6px;
+  font-size: 0.85rem;
 }
-
-.btn-premium:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.btn-premium:active {
-  transform: translateY(0);
-}
+.btn-premium:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-premium:active { transform: translateY(0); }
 
 .card-premium {
   background: var(--bg-card);
@@ -109,7 +85,4 @@ h1, h2, h3, .module-name {
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.3s ease;
 }
-
-.card-premium:hover {
-  box-shadow: var(--shadow-lg);
-}
+.card-premium:hover { box-shadow: var(--shadow-lg); }
