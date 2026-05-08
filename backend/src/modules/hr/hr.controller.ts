@@ -1,14 +1,21 @@
 import { Response } from 'express';
-import { prisma } from '../../config/database.config';
 import { hrService } from './hr.service';
 import { attendanceService } from './attendance.service';
 import { attendanceMachineService } from './attendance-machine.service';
 import { AuthRequest } from '../../types';
 
+// ─── Helpers ─────────────────────────────────────────────────
+
+/** Safely parse an integer from request params/query, returns NaN if invalid */
+const parseId = (value: string | string[] | undefined): number => {
+    const str = Array.isArray(value) ? value[0] : value;
+    return parseInt(str || '', 10);
+};
+
 export class HrController {
     // ─── Departments ─────────────────────────────────────────────
 
-    async getDepartments(req: AuthRequest, res: Response) {
+    async getDepartments(_req: AuthRequest, res: Response) {
         try {
             const data = await hrService.getDepartments();
             res.json({ success: true, data });
@@ -24,7 +31,8 @@ export class HrController {
 
     async updateDepartment(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             const data = await hrService.updateDepartment(id, req.body);
             res.json({ success: true, data });
         } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
@@ -32,7 +40,8 @@ export class HrController {
 
     async deleteDepartment(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             await hrService.deleteDepartment(id);
             res.json({ success: true, message: 'Đã xóa bộ phận' });
         } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
@@ -40,7 +49,7 @@ export class HrController {
 
     // ─── Shifts ──────────────────────────────────────────────────
 
-    async getShifts(req: AuthRequest, res: Response) {
+    async getShifts(_req: AuthRequest, res: Response) {
         try {
             const data = await hrService.getShifts();
             res.json({ success: true, data });
@@ -56,7 +65,8 @@ export class HrController {
 
     async updateShift(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             const data = await hrService.updateShift(id, req.body);
             res.json({ success: true, data });
         } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
@@ -64,7 +74,8 @@ export class HrController {
 
     async deleteShift(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             await hrService.deleteShift(id);
             res.json({ success: true, message: 'Đã xóa ca' });
         } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
@@ -84,7 +95,8 @@ export class HrController {
 
     async updateEmployee(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             const data = await hrService.updateEmployee(id, req.body);
             res.json({ success: true, data });
         } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
@@ -92,7 +104,8 @@ export class HrController {
 
     async deleteEmployee(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             await hrService.deleteEmployee(id);
             res.json({ success: true, message: 'Đã xóa nhân viên' });
         } catch (e: any) { res.status(400).json({ success: false, message: e.message }); }
@@ -153,7 +166,8 @@ export class HrController {
 
     async updateAttendance(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             const data = await attendanceService.updateAttendance(id, req.body);
             res.json({ success: true, data });
         } catch (error: any) {
@@ -163,7 +177,7 @@ export class HrController {
 
     // ─── Attendance Machines ─────────────────────────────────────
 
-    async getMachines(req: AuthRequest, res: Response) {
+    async getMachines(_req: AuthRequest, res: Response) {
         try {
             const data = await attendanceMachineService.getMachines();
             res.json({ success: true, data });
@@ -183,7 +197,8 @@ export class HrController {
 
     async deleteMachine(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             await attendanceMachineService.deleteMachine(id);
             res.json({ success: true, message: 'Xóa máy thành công' });
         } catch (error: any) {
@@ -191,7 +206,7 @@ export class HrController {
         }
     }
 
-    async syncMachines(req: AuthRequest, res: Response) {
+    async syncMachines(_req: AuthRequest, res: Response) {
         try {
             const results = await attendanceMachineService.syncAllMachines();
             res.json({ success: true, data: results });
@@ -202,7 +217,8 @@ export class HrController {
 
     async getMachineUsers(req: AuthRequest, res: Response) {
         try {
-            const id = parseInt(req.params.id as string);
+            const id = parseId(req.params.id);
+            if (isNaN(id)) return res.status(400).json({ success: false, message: 'Invalid ID' });
             const data = await attendanceMachineService.getMachineUsers(id);
             res.json({ success: true, data });
         } catch (error: any) {
@@ -210,52 +226,9 @@ export class HrController {
         }
     }
 
-    async autoMapUsers(req: AuthRequest, res: Response) {
+    async autoMapUsers(_req: AuthRequest, res: Response) {
         try {
-            const machines = await attendanceMachineService.getMachines();
-            let totalMapped = 0;
-            const logger = require('../../config/logger.config').logger;
-
-            // Helper: remove Vietnamese diacritics
-            const removeDiacritics = (str: string) => 
-                str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').trim().toLowerCase();
-
-            for (const machine of machines) {
-                try {
-                    const result = await attendanceMachineService.getMachineUsers(machine.id);
-                    const dbUsers = await prisma.user.findMany({
-                        where: { isActive: true, enrollNumber: null },
-                        select: { id: true, fullName: true }
-                    });
-
-                    logger.info(`Auto-map: Machine ${machine.name} has ${result.users.length} users, DB has ${dbUsers.length} unmapped users`);
-                    
-                    // Log first 5 machine user names for debugging
-                    const sampleNames = result.users.slice(0, 5).map((u: any) => `"${u.name}" (ID:${u.id})`);
-                    logger.info(`Auto-map: Sample machine names: ${sampleNames.join(', ')}`);
-
-                    for (const mu of result.users) {
-                        if (!mu.name || mu.mapped) continue;
-                        const muNorm = removeDiacritics(mu.name);
-                        
-                        const match = dbUsers.find(u => removeDiacritics(u.fullName) === muNorm);
-                        if (match) {
-                            await prisma.user.update({
-                                where: { id: match.id },
-                                data: { enrollNumber: mu.id?.toString() }
-                            });
-                            logger.info(`Auto-map: Matched "${mu.name}" (ID:${mu.id}) -> "${match.fullName}" (DB:${match.id})`);
-                            totalMapped++;
-                            // Remove from dbUsers to avoid double mapping
-                            const idx = dbUsers.findIndex(u => u.id === match.id);
-                            if (idx >= 0) dbUsers.splice(idx, 1);
-                        }
-                    }
-                } catch (e: any) { 
-                    logger.error(`Auto-map error for machine ${machine.name}: ${e.message}`);
-                }
-            }
-
+            const totalMapped = await attendanceMachineService.autoMapUsers();
             res.json({ success: true, data: { mapped: totalMapped } });
         } catch (error: any) {
             res.status(500).json({ success: false, message: error.message });

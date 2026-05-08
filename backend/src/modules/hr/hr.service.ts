@@ -1,5 +1,29 @@
 import { prisma } from '../../config/database.config';
 import { Prisma } from '@prisma/client';
+import { toVnTimeStr, getMonthDateRange, getThresholds } from './hr.utils';
+
+// ─── Types ───────────────────────────────────────────────────
+
+interface ViolationDetail {
+    date: Date;
+    checkIn: Date | null;
+    checkOut: Date | null;
+    isLate: boolean;
+    lateMinutes: number;
+    isEarly: boolean;
+    earlyMinutes: number;
+    note: string | null;
+}
+
+interface ViolatorStats {
+    userId: number;
+    fullName: string;
+    department: string;
+    count: number;
+    details: ViolationDetail[];
+}
+
+// ─── Service ─────────────────────────────────────────────────
 
 export class HrService {
     // ─── Departments ─────────────────────────────────────────────
@@ -95,7 +119,7 @@ export class HrService {
     async updateEmployee(id: number, data: {
         departmentId?: number; position?: string; phone?: string; joinDate?: string; enrollNumber?: string;
     }) {
-        const updateData: any = {};
+        const updateData: Record<string, unknown> = {};
         if (data.departmentId !== undefined) updateData.departmentId = data.departmentId;
         if (data.position !== undefined) updateData.position = data.position;
         if (data.phone !== undefined) updateData.phone = data.phone;
@@ -113,21 +137,13 @@ export class HrService {
         });
     }
 
+    // ─── Violation Report ────────────────────────────────────────
+
     async getViolationReport(month: number, year: number) {
-        // Use string dates to ensure Prisma doesn't shift by timezone for @db.Date fields
-        const startStr = `${year}-${String(month).padStart(2, '0')}-01`;
-        const lastDay = new Date(year, month, 0).getDate();
-        const endStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        const { start, end } = getMonthDateRange(month, year);
 
         const records = await prisma.attendance.findMany({
-            where: {
-                date: { gte: new Date(startStr), lte: new Date(endStr) },
-                OR: [
-                    { status: 'LATE' },
-                    { checkIn: { not: null } },
-                    { checkOut: { not: null } }
-                ]
-            },
+            where: { date: { gte: start, lte: end } },
             include: {
                 user: { select: { fullName: true, department: { select: { name: true } } } },
                 shift: true
@@ -135,53 +151,56 @@ export class HrService {
             orderBy: { date: 'asc' }
         });
 
-        const userStats = new Map<number, any>();
+        const userStats = new Map<number, ViolatorStats>();
         const deptStats = new Map<string, number>();
         let totalViolations = 0;
-        
+
         for (const r of records) {
             let isLate = false;
             let isEarly = false;
             let lateMinutes = 0;
             let earlyMinutes = 0;
             
+            // Determine thresholds from shift or machine note
+            let startLimit = '08:01:00';
+            let shiftStartStr = '08:00:00';
+            let endLimit = '17:00:00';
+
+            if (r.shift?.startTime) {
+                shiftStartStr = `${r.shift.startTime}:00`;
+                const [h, m] = r.shift.startTime.split(':').map(Number);
+                startLimit = `${String(h).padStart(2, '0')}:${String(m + 1).padStart(2, '0')}:00`;
+            } else if (r.note?.includes('SX')) {
+                const sxThresholds = getThresholds('SX');
+                startLimit = sxThresholds.checkInLimit;
+                shiftStartStr = sxThresholds.shiftStart;
+            }
+
+            if (r.shift?.endTime) {
+                endLimit = `${r.shift.endTime}:00`;
+            } else if (r.note?.includes('SX')) {
+                endLimit = getThresholds('SX').checkOutLimit;
+            }
+
             // Late Check-in logic
             if (r.checkIn) {
-                let startHour = 8, startMin = 0;
-                if (r.shift?.startTime) {
-                    [startHour, startMin] = r.shift.startTime.split(':').map(Number);
-                } else if (r.note?.includes('SX')) startHour = 7;
-                else if (r.note?.includes('VP')) startHour = 8;
-                
-                const ci = new Date(r.checkIn);
-                const shiftStart = new Date(ci);
-                shiftStart.setHours(startHour, startMin, 0, 0);
-                
-                // Strict check including seconds, but with 1-minute grace period (>= 08:01:00)
-                const graceStart = new Date(shiftStart);
-                graceStart.setMinutes(startMin + 1);
-                
-                if (ci.getTime() >= graceStart.getTime()) {
+                const timeStr = toVnTimeStr(r.checkIn);
+                if (timeStr >= startLimit) {
                     isLate = true;
-                    lateMinutes = Math.ceil((ci.getTime() - shiftStart.getTime()) / 60000);
+                    const [h, m] = timeStr.split(':').map(Number);
+                    const [sh, sm] = shiftStartStr.split(':').map(Number);
+                    lateMinutes = (h * 60 + m) - (sh * 60 + sm);
                 }
             }
 
             // Early Check-out logic
             if (r.checkOut) {
-                let endHour = 17, endMin = 0;
-                if (r.shift?.endTime) {
-                    [endHour, endMin] = r.shift.endTime.split(':').map(Number);
-                } else if (r.note?.includes('SX')) endHour = 16;
-                else if (r.note?.includes('VP')) endHour = 17;
-                
-                const co = new Date(r.checkOut);
-                const shiftEnd = new Date(co);
-                shiftEnd.setHours(endHour, endMin, 0, 0);
-                
-                if (co.getTime() < shiftEnd.getTime()) {
+                const timeStr = toVnTimeStr(r.checkOut);
+                if (timeStr < endLimit) {
                     isEarly = true;
-                    earlyMinutes = Math.ceil((shiftEnd.getTime() - co.getTime()) / 60000);
+                    const [h, m] = timeStr.split(':').map(Number);
+                    const [eh, em] = endLimit.split(':').map(Number);
+                    earlyMinutes = (eh * 60 + em) - (h * 60 + m);
                 }
             }
 
@@ -198,7 +217,7 @@ export class HrService {
                         details: []
                     });
                 }
-                const stats = userStats.get(r.userId);
+                const stats = userStats.get(r.userId)!;
                 stats.count++;
                 stats.details.push({
                     date: r.date,
@@ -219,7 +238,7 @@ export class HrService {
 
         const topViolators = Array.from(userStats.values())
             .sort((a, b) => b.count - a.count)
-            .slice(0, 15); // Show more in the top list
+            .slice(0, 15);
 
         const departmentBreakdown = Array.from(deptStats.entries())
             .map(([name, count]) => ({ name, count }))

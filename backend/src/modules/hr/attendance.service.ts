@@ -1,19 +1,20 @@
 import { prisma } from '../../config/database.config';
 import { AttendanceStatus } from '@prisma/client';
+import { getVnToday, getMonthDateRange } from './hr.utils';
 
 export class AttendanceService {
     /**
      * Check-in: tạo hoặc cập nhật bản ghi chấm công hôm nay
      */
     async checkIn(userId: number, shiftId?: number) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = getVnToday();
         const now = new Date();
 
-        // Xác định trạng thái (LATE nếu check-in sau 8:30)
-        const hour = now.getHours();
-        const minute = now.getMinutes();
-        const isLate = hour > 8 || (hour === 8 && minute > 30);
+        // Xác định trạng thái (LATE nếu check-in sau 8:30 VN time)
+        const hour = now.getUTCHours() + 7; // VN = UTC+7
+        const minute = now.getUTCMinutes();
+        const vnHour = hour >= 24 ? hour - 24 : hour;
+        const isLate = vnHour > 8 || (vnHour === 8 && minute > 30);
 
         return prisma.attendance.upsert({
             where: { userId_date: { userId, date: today } },
@@ -35,8 +36,7 @@ export class AttendanceService {
      * Check-out: cập nhật giờ ra và tính OT
      */
     async checkOut(userId: number) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = getVnToday();
         const now = new Date();
 
         const attendance = await prisma.attendance.findUnique({
@@ -65,11 +65,10 @@ export class AttendanceService {
      * Lấy bảng chấm công theo tháng
      */
     async getMonthlyAttendance(month: number, year: number, userId?: number) {
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0); // last day of month
+        const { start, end } = getMonthDateRange(month, year);
 
         const where: any = {
-            date: { gte: startDate, lte: endDate },
+            date: { gte: start, lte: end },
         };
         if (userId) where.userId = userId;
 
@@ -87,8 +86,7 @@ export class AttendanceService {
      * Thống kê chấm công tháng: tổng ngày công, OT, đi muộn
      */
     async getMonthlySummary(month: number, year: number) {
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0);
+        const { start, end } = getMonthDateRange(month, year);
 
         // Fetch all active users who are not admin (typically only workers/managers need attendance)
         const users = await prisma.user.findMany({
@@ -97,7 +95,7 @@ export class AttendanceService {
         });
 
         const records = await prisma.attendance.findMany({
-            where: { date: { gte: startDate, lte: endDate } },
+            where: { date: { gte: start, lte: end } },
         });
 
         // Initialize user map with all users
@@ -139,7 +137,7 @@ export class AttendanceService {
         status?: AttendanceStatus; overtimeHours?: number; note?: string;
         checkIn?: string; checkOut?: string;
     }) {
-        const updateData: any = {};
+        const updateData: Record<string, unknown> = {};
         if (data.status) updateData.status = data.status;
         if (data.overtimeHours !== undefined) updateData.overtimeHours = data.overtimeHours;
         if (data.note !== undefined) updateData.note = data.note;

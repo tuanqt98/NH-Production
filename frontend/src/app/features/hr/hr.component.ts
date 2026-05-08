@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject, computed } from '@angular/core';
+import { Component, OnInit, signal, inject, computed, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HrService, Department, Shift, Employee, AttendanceSummary } from '../../core/services/hr.service';
@@ -261,7 +261,7 @@ import { AuthService } from '../../core/services/auth.service';
                   <span class="last-sync" *ngIf="m.lastSync"> - Lần cuối: {{ m.lastSync | date:'HH:mm dd/MM' }}</span>
                 </div>
                 <div class="item-actions">
-                  <button class="btn-sm" (click)="loadMachineUsers(m.id, m.name)">👥 Gán ID</button>
+                  <button class="btn-sm" (click)="$event.stopPropagation(); loadMachineUsers(m.id, m.name)">👥 Gán ID</button>
                   <button class="btn-icon" (click)="openMachineModal(m)">✏️</button>
                   <button class="btn-icon" (click)="deleteMachine(m.id)">🗑️</button>
                 </div>
@@ -428,8 +428,13 @@ import { AuthService } from '../../core/services/auth.service';
       @if (showMachineUsersModal) {
         <div class="modal-backdrop" (click)="showMachineUsersModal = false">
           <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
-            <div class="modal-header">
-              <h3>👥 Gán nhân viên - Máy {{ machineUsersName }}</h3>
+            <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between;">
+              <h3 style="margin:0">👥 Gán nhân viên - Máy {{ machineUsersName }}</h3>
+              <div class="modal-search" style="flex: 1; max-width: 300px; margin: 0 1.5rem;">
+                <input type="text" placeholder="Tìm tên nhân viên..." 
+                       [ngModel]="modalEmpSearch()" (ngModelChange)="modalEmpSearch.set($event)"
+                       style="width: 100%; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: white; font-size: 0.9rem;">
+              </div>
               <button class="modal-close" (click)="showMachineUsersModal = false">×</button>
             </div>
             <p style="color:#aaa; font-size:0.85rem; margin-bottom:12px;">
@@ -452,14 +457,45 @@ import { AuthService } from '../../core/services/auth.service';
                       <td>{{ mu.name || '(không tên)' }}</td>
                       <td>
                         @if (mu.mappedName) {
-                          <span class="badge badge-success">✅ {{ mu.mappedName }}</span>
+                          <div class="flex items-center gap-2">
+                            <span class="badge badge-success">✅ {{ mu.mappedName }}</span>
+                            <button class="btn-icon" (click)="$event.stopPropagation(); unmapUser(mu)" title="Thay đổi">✏️</button>
+                          </div>
                         } @else {
-                          <select class="form-input" [(ngModel)]="mu.selectedUserId" [name]="'mu_' + mu.uid" style="padding:4px 8px; font-size:0.85rem;">
-                            <option [ngValue]="0">-- Chọn nhân viên --</option>
-                            @for (e of employees(); track e.id) {
-                              <option [ngValue]="e.id">{{ e.fullName }}</option>
+                        <div class="searchable-dropdown" [class.active]="activeRowUid() === mu.uid">
+                          <div class="dropdown-trigger" (click)="activeRowUid.set(mu.uid); modalEmpSearch.set('')">
+                            <span [style.color]="mu.selectedUserId > 0 ? '#fff' : '#888'">
+                              {{ getEmpName(mu.selectedUserId) || '-- Chọn nhân viên --' }}
+                            </span>
+                            @if (!mu.mappedName && mu.suggestion) {
+                              <span class="badge warning" style="margin-left: 8px; font-size: 0.65rem;">Gợi ý: {{ mu.suggestion.fullName }}</span>
                             }
-                          </select>
+                            <span class="chevron">▼</span>
+                          </div>
+                          
+                          @if (activeRowUid() === mu.uid) {
+                            <div class="dropdown-panel" (click)="$event.stopPropagation()">
+                              <input type="text" placeholder="Tìm tên..." #sInput
+                                     [ngModel]="modalEmpSearch()" (ngModelChange)="modalEmpSearch.set($event)"
+                                     (keydown.esc)="activeRowUid.set(null)"
+                                     (keydown.enter)="selectFirstFiltered(mu)">
+                              <div class="options-list">
+                                <div class="option-item" (click)="selectEmployeeInDropdown(mu, 0)">-- Không chọn --</div>
+                                @for (e of allEmployees(); track e.id) {
+                                  @if (!modalEmpSearch() || e.fullName.toLowerCase().includes(modalEmpSearch().toLowerCase())) {
+                                    <div class="option-item" [class.selected]="e.id === mu.selectedUserId"
+                                         (click)="selectEmployeeInDropdown(mu, e.id)">
+                                      {{ e.fullName }}
+                                    </div>
+                                  }
+                                }
+                                @if (modalEmpSearch() && !hasFilteredResults()) {
+                                  <div class="option-item empty">Không tìm thấy</div>
+                                }
+                              </div>
+                            </div>
+                          }
+                        </div>
                         }
                       </td>
                       <td>
@@ -599,124 +635,7 @@ import { AuthService } from '../../core/services/auth.service';
       }
     </div>
   `,
-    styles: [`
-    .hr-container { padding: 1.5rem; max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .header h1 { margin: 0; font-size: 1.8rem; }
-    .header-actions { display: flex; gap: 0.5rem; }
-
-    .btn-success { background: #27ae60; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; }
-    .btn-warning { background: #e74c3c; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 600; }
-    .btn-success:hover, .btn-warning:hover { filter: brightness(1.1); transform: translateY(-1px); }
-
-    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; }
-    .tabs button { background: none; border: none; color: #888; padding: 0.6rem 1.2rem; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
-    .tabs button.active { color: white; background: rgba(255,255,255,0.08); border-bottom: 2px solid #e74c3c; }
-
-    .tab-content { animation: fadeIn 0.2s ease; }
-    .filters-row { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; }
-    .search-box { flex: 1; position: relative; }
-    .search-box span { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); }
-    .search-box input { width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: white; }
-    .filters-row select { padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: white; min-width: 160px; }
-
-    .mode-toggle { display: flex; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); height: fit-content; }
-    .mode-toggle button { background: none; border: none; color: #888; padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; white-space: nowrap; }
-    .mode-toggle button.active { background: #e74c3c; color: white; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); }
-    .mode-toggle button:not(.active):hover { color: white; background: rgba(255,255,255,0.05); }
-
-    .table-wrap { background: var(--card-bg, #1a1a2e); border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); }
-    .table-wrap.small td { padding: 0.5rem 0.8rem; font-size: 0.8rem; }
-    table { width: 100%; border-collapse: collapse; }
-    th { padding: 0.8rem 1rem; text-align: left; background: rgba(255,255,255,0.03); font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-    td { padding: 0.7rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; }
-    tr:hover { background: rgba(255,255,255,0.02); }
-    tr.selected { background: rgba(231, 76, 60, 0.1); border-left: 4px solid #e74c3c; }
-    .bold { font-weight: 600; }
-    .empty { text-align: center; color: #555; padding: 2rem; }
-
-    .badge { padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem; }
-    .badge.dept { background: rgba(52,152,219,0.15); color: #3498db; }
-    .badge.active { background: rgba(39,174,96,0.15); color: #27ae60; }
-    .badge.inactive { background: rgba(231,76,60,0.15); color: #e74c3c; }
-    .badge.warning { background: rgba(243,156,18,0.15); color: #f39c12; }
-    .text-green { color: #27ae60; font-weight: 600; }
-    .text-yellow { color: #f39c12; font-weight: 600; }
-    .text-red { color: #e74c3c; font-weight: 600; }
-    .text-blue { color: #3498db; font-weight: 600; }
-
-    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    .settings-card { background: var(--card-bg, #1a1a2e); border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); padding: 1.5rem; }
-    .settings-card.full-width { grid-column: 1 / -1; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .card-header h3 { margin: 0; font-size: 1.1rem; }
-    
-    .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .setting-item:last-child { border-bottom: none; }
-    .setting-item strong { display: block; font-size: 0.95rem; }
-    .setting-item .sub { display: block; font-size: 0.8rem; color: #666; margin-top: 2px; }
-    .setting-item .last-sync { color: #555; }
-    .item-actions { display: flex; gap: 0.4rem; align-items: center; }
-    
-    .btn-sm { background: #e74c3c; color: white; border: none; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
-    .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-sm:not(:disabled):hover { filter: brightness(1.1); transform: translateY(-1px); }
-    .btn-icon { background: none; border: none; color: #888; cursor: pointer; padding: 0.3rem; border-radius: 4px; font-size: 1rem; transition: all 0.2s; }
-    .btn-icon:hover { background: rgba(255,255,255,0.1); color: white; }
-    
-    .stats-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
-    .stat-box.premium { background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; padding: 1.5rem; border-radius: 20px; gap: 1.2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-    .stat-icon { width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
-    .stat-icon.red { background: rgba(231,76,60,0.15); color: #e74c3c; }
-    .stat-icon.yellow { background: rgba(243,156,18,0.15); color: #f39c12; }
-    .stat-icon.blue { background: rgba(52,152,219,0.15); color: #3498db; }
-    .stat-content { display: flex; flex-direction: column; }
-    .st-val { font-size: 2rem; font-weight: 800; line-height: 1; }
-    .st-lbl { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
-
-    .report-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 1.5rem; }
-    .right-col { display: flex; flex-direction: column; gap: 1.5rem; }
-    .report-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 1.5rem; }
-    .animate-in { animation: slideIn 0.3s ease-out; }
-    @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
-    .mb-4 { margin-bottom: 1.5rem; }
-
-    .dept-chart { display: flex; flex-direction: column; gap: 1.2rem; }
-    .dept-bar-row { display: flex; flex-direction: column; gap: 0.4rem; }
-    .dept-info { display: flex; justify-content: space-between; font-size: 0.85rem; }
-    .dept-name { color: #ccc; }
-    .dept-count { font-weight: 700; color: #fff; }
-    .bar-container { background: rgba(255,255,255,0.05); height: 8px; border-radius: 4px; overflow: hidden; }
-    .bar { background: linear-gradient(90deg, #e74c3c, #f39c12); height: 100%; border-radius: 4px; }
-
-    .empty-detail { display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.01); border: 2px dashed rgba(255,255,255,0.05); min-height: 200px; }
-
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal-card { background: #1a1a2e; width: 500px; border-radius: 16px; padding: 2rem; border: 1px solid rgba(255,255,255,0.15); }
-    .modal-card.small { width: 400px; }
-    .modal-card h3 { margin: 0 0 0.5rem; border-left: 4px solid #e74c3c; padding-left: 1rem; }
-    .modal-sub { color: #888; margin: 0 0 1.5rem; padding-left: 1.3rem; }
-    .form-group { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem; }
-    .form-group label { font-size: 0.8rem; color: #818cf8; }
-    .form-group input, .form-group select { padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid rgba(81,140,248,0.2); background: rgba(81,140,248,0.05); color: white; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
-    .btn-primary { background: #e74c3c; color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; }
-    .btn-ghost { background: none; border: 1px solid rgba(255,255,255,0.2); color: #888; padding: 0.6rem 1.5rem; border-radius: 8px; cursor: pointer; }
-    
-    .modal-lg { width: 800px !important; }
-    .table-wrap { background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
-    .mapped { background: rgba(39,174,96,0.05); }
-    .badge-success { background: rgba(39,174,96,0.15); color: #27ae60; border: 1px solid rgba(39,174,96,0.2); }
-    .btn-success { background: #27ae60 !important; color: white !important; }
-
-    @media (max-width: 768px) {
-      .settings-grid { grid-template-columns: 1fr; }
-      .filters-row { flex-direction: column; }
-      .header { flex-direction: column; gap: 1rem; align-items: flex-start; }
-    }
-  `],
+    styleUrls: ['./hr.component.css'],
 })
 export class HrComponent implements OnInit {
     activeTab = 'employees';
@@ -733,6 +652,17 @@ export class HrComponent implements OnInit {
     showMachineUsersModal = false;
     machineUsersName = '';
     machineUsersList = signal<any[]>([]);
+    allEmployees = signal<Employee[]>([]);
+    modalEmpSearch = signal('');
+    activeRowUid = signal<number | null>(null);
+
+    @HostListener('document:click', ['$event'])
+    onDocumentClick(event: MouseEvent) {
+        if (!this.showMachineUsersModal) return;
+        if (!(event.target as HTMLElement).closest('.searchable-dropdown')) {
+            this.activeRowUid.set(null);
+        }
+    }
 
     private auth = inject(AuthService);
     isAdmin = this.auth.isAdmin;
@@ -774,6 +704,7 @@ export class HrComponent implements OnInit {
         this.loadAttendance();
         if (this.isAdmin() || this.isManager()) {
             this.loadEmployees();
+            this.hrService.getEmployees().subscribe(r => this.allEmployees.set(r.data));
         }
     }
 
@@ -789,10 +720,13 @@ export class HrComponent implements OnInit {
                 this.syncing.set(false);
                 this.machineUsersList.set(res.data.users.map((u: any) => ({
                     ...u,
-                    selectedUserId: 0,
+                    selectedUserId: u.suggestion?.id || 0,
                     mappedName: u.mapped ? this.getMappedName(u.id) : null
                 })));
-                this.showMachineUsersModal = true;
+                setTimeout(() => {
+                    this.showMachineUsersModal = true;
+                    this.modalEmpSearch.set('');
+                }, 50);
             },
             error: (e) => {
                 this.syncing.set(false);
@@ -829,6 +763,53 @@ export class HrComponent implements OnInit {
         this.hrService.getEmployees({ departmentId: this.empDeptFilter, search })
             .subscribe(r => this.employees.set(r.data));
     }
+
+    getEmpName(id: number): string {
+        if (!id) return '';
+        const emp = this.allEmployees().find(e => e.id === id);
+        return emp ? emp.fullName : '';
+    }
+
+    selectEmployeeInDropdown(mu: any, empId: number) {
+        mu.selectedUserId = empId;
+        this.activeRowUid.set(null);
+    }
+
+    unmapUser(mu: any) {
+        const empId = this.allEmployees().find(e => e.enrollNumber === mu.id.toString())?.id;
+        if (empId) {
+            // Native confirm can sometimes cause flicker in certain Angular/Browser combinations
+            // For now, let's do it directly to verify if this is the cause of flickering
+            this.syncing.set(true);
+            this.hrService.updateEmployee(empId, { enrollNumber: null }).subscribe({
+                next: () => {
+                    this.syncing.set(false);
+                    mu.mappedName = null;
+                    mu.selectedUserId = 0;
+                    this.loadEmployees();
+                },
+                error: (e) => {
+                    this.syncing.set(false);
+                    alert('❌ Lỗi hủy gán: ' + (e.error?.message || e.message));
+                }
+            });
+        } else {
+            mu.mappedName = null;
+            mu.selectedUserId = 0;
+        }
+    }
+
+    hasFilteredResults(): boolean {
+        const term = this.modalEmpSearch().toLowerCase();
+        return this.allEmployees().some(e => e.fullName.toLowerCase().includes(term));
+    }
+
+    selectFirstFiltered(mu: any) {
+        const term = this.modalEmpSearch().toLowerCase();
+        const first = this.allEmployees().find(e => e.fullName.toLowerCase().includes(term));
+        if (first) this.selectEmployeeInDropdown(mu, first.id);
+    }
+
     loadAttendance() {
         if (this.attMode() === 'summary') this.loadSummary();
         else this.loadDetails();
