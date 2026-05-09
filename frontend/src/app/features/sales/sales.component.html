@@ -1,0 +1,239 @@
+<div class="sales-module">
+  <!-- LIST VIEW -->
+  <ng-container *ngIf="viewMode === 'list'">
+    <div class="sales-toolbar">
+      <div class="toolbar-left">
+        <input class="search-input" type="text" placeholder="🔍 Tìm kiếm đơn hàng...">
+      </div>
+      <div class="toolbar-right">
+        <span class="toolbar-info">{{orders.length}} đơn hàng</span>
+        <button class="btn-odoo" (click)="openCreateForm()">+ Mới</button>
+      </div>
+    </div>
+
+    <div class="table-area">
+      <table class="odoo-table">
+        <thead>
+          <tr>
+            <th>Số</th>
+            <th>Ngày tạo</th>
+            <th>Khách hàng</th>
+            <th>Tên hàng</th>
+            <th>Số lượng</th>
+            <th>ĐVT</th>
+            <th>Nhân viên</th>
+            <th>Trạng thái</th>
+            <th class="th-right">Tổng</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let o of orders" (click)="viewOrder(o)">
+            <td class="td-code">{{o.orderCode}}</td>
+            <td class="td-muted">{{o.createdAt | date:'dd/MM/yyyy HH:mm'}}</td>
+            <td class="td-name">{{o.customer}}</td>
+            <td>{{o.productName || o.productCode || '-'}}</td>
+            <td>{{o.plannedQty | number}}</td>
+            <td class="td-muted">{{o.unit || 'Cái'}}</td>
+            <td class="td-muted">{{o.salesPerson || '-'}}</td>
+            <td>
+              <span class="status-badge" [ngClass]="getStatusClass(o.status)">
+                {{STATUS_LABELS[o.status] || o.status}}
+              </span>
+            </td>
+            <td class="th-right td-total">{{formatVND(o.totalAmount || 0)}}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="empty-state" *ngIf="orders.length === 0 && !isLoading">Chưa có đơn hàng</div>
+    </div>
+  </ng-container>
+
+  <!-- FORM VIEW -->
+  <ng-container *ngIf="viewMode === 'form'">
+    <div class="detail-view">
+      <!-- Header Actions -->
+      <div class="detail-header">
+        <div class="header-left">
+          <button class="back-btn" (click)="viewMode = 'list'">← Quay lại</button>
+          <span class="detail-nav">/ Báo giá / {{currentOrder.orderCode || 'Mới'}}</span>
+        </div>
+        <div class="header-right">
+          <button class="btn-white">Tạo hoá đơn</button>
+          <button class="btn-white">Gửi qua email</button>
+          <button class="btn-white">Xem trước</button>
+          <button class="btn-purple">In hợp đồng</button>
+        </div>
+      </div>
+
+      <!-- Status Pipeline -->
+      <div class="status-pipeline">
+        <div class="pipe-step" *ngFor="let s of STATUSES; let i = index"
+             [class.active]="currentOrder.status === s"
+             [class.done]="getStatusIndex(currentOrder.status) > i">
+          {{STATUS_LABELS[s]}}
+        </div>
+      </div>
+
+      <div class="detail-layout">
+        <!-- Main Form Content -->
+        <div class="detail-main">
+          <div class="detail-card">
+            <h1 class="order-code">{{currentOrder.orderCode || 'Báo giá mới'}}</h1>
+
+            <div class="form-2col">
+              <div class="form-col">
+                <div class="form-field">
+                  <label>Đơn in bù</label>
+                  <input type="checkbox" [(ngModel)]="currentOrder.isSample">
+                </div>
+                <div class="form-field">
+                  <label>Khách hàng</label>
+                  <div class="autocomplete-wrapper" (click)="$event.stopPropagation()">
+                    <input type="text" [(ngModel)]="currentOrder.customer"
+                           (input)="searchCustomerSuggestions($any($event.target).value)"
+                           (focus)="onCustomerFocus()" placeholder="Chọn khách hàng...">
+                    <div class="suggestions-dropdown" *ngIf="showSuggestions">
+                      <div *ngIf="suggestions.length === 0" class="no-result">Không tìm thấy</div>
+                      <div *ngFor="let s of suggestions" class="suggestion-item" (click)="selectCustomer(s)">
+                        <div class="s-main">{{s.name}}</div>
+                        <div class="s-sub">{{s.code}}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label>Mã khách hàng</label>
+                  <div class="value">{{currentOrder.customerCode || '-'}}</div>
+                </div>
+                <div class="form-field">
+                  <label>Level hàng</label>
+                  <div class="stars">
+                    <span *ngFor="let i of [1,2,3,4,5]" [class.active]="currentOrder.level >= i">★</span>
+                  </div>
+                </div>
+                <div class="form-field">
+                  <label>Nhân viên KTBH</label>
+                  <input type="text" [(ngModel)]="currentOrder.salesPerson">
+                </div>
+                <div class="form-field">
+                  <label>Tổng Chi Phí Thực Tế</label>
+                  <div class="value">0,00</div>
+                </div>
+                <div class="form-field">
+                  <label>Ngày xác nhận</label>
+                  <div class="value">{{currentOrder.confirmedAt | date:'dd/MM/yyyy HH:mm'}}</div>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="form-field">
+                  <label>Ngày đặt hàng</label>
+                  <div class="value">{{currentOrder.createdAt | date:'dd/MM/yyyy HH:mm'}}</div>
+                </div>
+                <div class="form-field">
+                  <label>Ngày giao hàng</label>
+                  <input type="date" [(ngModel)]="currentOrder.dueDate">
+                </div>
+                <div class="form-field">
+                  <label>Điều khoản thanh toán</label>
+                  <input type="text" [(ngModel)]="currentOrder.paymentTerms" placeholder="30 ngày">
+                </div>
+                <div class="form-field">
+                  <label>Chứng từ gốc</label>
+                  <input type="text" placeholder="Gõ để tìm...">
+                </div>
+                <div class="form-field">
+                  <label>Trạng thái sau sản xuất</label>
+                  <input type="text" placeholder="Chờ xử lý">
+                </div>
+                <div class="form-field">
+                  <label>Đơn mẫu</label>
+                  <input type="checkbox" [(ngModel)]="currentOrder.isSample">
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="detail-tabs">
+              <button class="detail-tab" [class.active]="detailTab === 'lines'" (click)="detailTab = 'lines'">Chi tiết đơn hàng</button>
+              <button class="detail-tab" [class.active]="detailTab === 'other'" (click)="detailTab = 'other'">Thông tin khác</button>
+              <button class="detail-tab" [class.active]="detailTab === 'quotes'" (click)="detailTab = 'quotes'">Báo giá đã lưu</button>
+              <button class="detail-tab" [class.active]="detailTab === 'claim'" (click)="detailTab = 'claim'">Claim</button>
+              <button class="detail-tab" [class.active]="detailTab === 'sample'" (click)="detailTab = 'sample'">Đơn in bù</button>
+              <button class="detail-tab" [class.active]="detailTab === 'print'" (click)="detailTab = 'print'">In báo giá</button>
+              <button class="detail-tab" [class.active]="detailTab === 'error'" (click)="detailTab = 'error'">Biên bản lỗi</button>
+            </div>
+
+            <!-- Lines Tab -->
+            <div class="tab-panel" *ngIf="detailTab === 'lines'">
+              <table class="lines-table">
+                <thead>
+                  <tr>
+                    <th class="th-product">Sản phẩm</th>
+                    <th>Số lượng</th>
+                    <th>Đã giao</th>
+                    <th>Đã xuất hóa...</th>
+                    <th>ĐVT</th>
+                    <th>Đơn giá</th>
+                    <th>Đơn giá vốn</th>
+                    <th>Thuế</th>
+                    <th class="th-right">Số tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input type="text" [(ngModel)]="currentOrder.productName" placeholder="Tên sản phẩm" class="line-input full"></td>
+                    <td><input type="number" [(ngModel)]="currentOrder.plannedQty" class="line-input num"></td>
+                    <td><div class="value">0,00</div></td>
+                    <td><div class="value">0,00</div></td>
+                    <td><div class="value">Cái</div></td>
+                    <td><input type="number" [(ngModel)]="currentOrder.unitPrice" class="line-input num"></td>
+                    <td><input type="number" [(ngModel)]="currentOrder.costPrice" class="line-input num"></td>
+                    <td><div class="value">8%</div></td>
+                    <td class="th-right td-amount">{{formatVND(getSubtotal())}}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="totals-block">
+                <div class="total-row"><span>Số tiền trước thuế:</span><span>{{formatVND(getSubtotal())}}</span></div>
+                <div class="total-row"><span>Thuế GTGT 8%:</span><span>{{formatVND(getTax())}}</span></div>
+                <div class="total-row grand"><span>Tổng:</span><span class="grand-total">{{formatVND(getTotal())}}</span></div>
+                <div class="total-row margin"><span>Biên lợi nhuận:</span><span>{{formatVND(getMargin())}} ({{getMarginPercent() | number:'1.2-2'}}%)</span></div>
+              </div>
+            </div>
+
+            <div class="detail-actions">
+              <button class="btn-save" (click)="saveOrder()">💾 Lưu</button>
+              <button class="btn-cancel" (click)="viewMode = 'list'">Hủy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chatter Sidebar -->
+        <div class="detail-side">
+          <div class="chatter">
+            <div class="chatter-header">
+              <button class="chatter-btn active">Gửi tin</button>
+              <button class="chatter-btn">Ghi chú</button>
+              <button class="chatter-btn">Hoạt động</button>
+            </div>
+            <div class="chatter-timeline">
+              <div class="chatter-item" *ngFor="let log of timeline">
+                <div class="chatter-avatar" [style.background]="log.color">{{log.user[0]}}</div>
+                <div class="chatter-content">
+                  <div class="chatter-info">
+                    <strong>{{log.user}}</strong> — {{log.time}}
+                  </div>
+                  <div class="chatter-text">
+                    <span *ngIf="log.status" class="log-status">{{log.status}}</span>
+                    {{log.action}}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+</div>

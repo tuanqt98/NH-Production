@@ -36,6 +36,10 @@ export const routes: Routes = [
                 loadComponent: () => import('./features/hr/hr.component').then(m => m.HrComponent),
             },
             {
+                path: 'attendance',
+                loadComponent: () => import('./features/attendance/attendance.component').then(m => m.AttendanceComponent),
+            },
+            {
                 path: '',
                 redirectTo: 'dashboard',
                 pathMatch: 'full',

@@ -3,282 +3,305 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
 
-type ViewMode = 'list' | 'form';
+const AVATAR_COLORS = [
+  '#E74C3C','#8E44AD','#2980B9','#27AE60','#F39C12','#D35400',
+  '#1ABC9C','#C0392B','#7D3C98','#2E86C1','#148F77','#CA6F1E',
+];
+
+type ViewMode = 'kanban' | 'list' | 'form';
 
 @Component({
     selector: 'app-customers',
     standalone: true,
     imports: [CommonModule, FormsModule],
     template: `
-    <div class="premium-view">
-        <!-- ACTION BAR -->
-        <div class="action-bar" *ngIf="viewMode === 'list'">
-            <div class="bar-left">
-                <button class="btn-premium" (click)="openCreateForm()">
-                    <span>+</span> Create Customer
-                </button>
-                <button class="btn-ghost" (click)="triggerImport()">
-                    📥 Import Excel
-                </button>
-                <button class="btn-danger-ghost" *ngIf="selectedIds.size > 0" (click)="deleteSelected()">
-                    🗑️ Delete ({{selectedIds.size}})
-                </button>
-            </div>
-            <div class="bar-right">
-                <div class="search-input-wrapper">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" placeholder="Search customers..." [(ngModel)]="searchQuery" (input)="onSearch()">
-                </div>
-            </div>
+    <div class="cust-module">
+      <!-- Toolbar -->
+      <div class="cust-toolbar" *ngIf="viewMode !== 'form'">
+        <div class="toolbar-left">
+          <input class="search-input" type="text" placeholder="🔍 Tìm kiếm..."
+                 [(ngModel)]="searchQuery" (ngModelChange)="onSearch()">
+          <input type="file" accept=".xlsx,.xls" #fileInput (change)="onFileSelected($event)" style="display:none">
         </div>
-
-        <!-- LIST GRID -->
-        <div class="list-container" *ngIf="viewMode === 'list'">
-            <div class="selection-header" *ngIf="customers.length > 0">
-                <label class="custom-checkbox">
-                    <input type="checkbox" (change)="toggleSelectAll($event)" [checked]="isAllSelected()">
-                    <span class="checkmark"></span> Select All
-                </label>
-            </div>
-            
-            <div class="customer-grid" *ngIf="!isLoading">
-                <div *ngFor="let c of customers" class="customer-card-premium" [class.selected]="selectedIds.has(c.id)" (click)="viewCustomer(c)">
-                    <div class="card-header">
-                        <label class="custom-checkbox" (click)="$event.stopPropagation()">
-                            <input type="checkbox" [checked]="selectedIds.has(c.id)" (change)="toggleSelect(c.id)">
-                            <span class="checkmark"></span>
-                        </label>
-                        <span class="customer-type" [class.company]="c.isCompany">{{c.isCompany ? 'Company' : 'Individual'}}</span>
-                    </div>
-                    
-                    <div class="card-body">
-                        <div class="avatar-wrapper">
-                            <img [src]="'https://ui-avatars.com/api/?name=' + c.name + '&background=6366f1&color=fff&bold=true'" alt="avatar">
-                        </div>
-                        <div class="info-wrapper">
-                            <h3 class="customer-name">{{c.name}}</h3>
-                            <div class="customer-kd" *ngIf="c.salesPerson">
-                                <span class="dot"></span> {{c.salesPerson}}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card-footer">
-                        <div class="footer-item">
-                            <span class="icon">📞</span> {{c.phone || '--'}}
-                        </div>
-                        <div class="footer-item">
-                            <span class="icon">📍</span> {{c.address || '--'}}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="loading-overlay" *ngIf="isLoading">
-                <div class="spinner"></div>
-            </div>
+        <div class="toolbar-right">
+          <span class="toolbar-info">{{customers.length}} liên hệ</span>
+          <div class="view-toggle">
+            <button class="view-btn" [class.active]="viewMode === 'kanban'" (click)="viewMode = 'kanban'" title="Kanban">▦</button>
+            <button class="view-btn" [class.active]="viewMode === 'list'" (click)="viewMode = 'list'" title="Danh sách">☰</button>
+          </div>
+          <button class="btn-odoo" (click)="openCreateForm()">+ Mới</button>
+          <button class="btn-import" (click)="triggerImport()">📥 Import</button>
+          <button class="btn-delete" *ngIf="selectedIds.size > 0" (click)="deleteSelected()">🗑️ Xóa ({{selectedIds.size}})</button>
         </div>
+      </div>
 
-        <!-- FORM VIEW -->
-        <div class="form-container" *ngIf="viewMode === 'form'">
-            <div class="form-header">
-                <div class="header-left">
-                    <button class="btn-icon-only" (click)="viewMode = 'list'">←</button>
-                    <h2>{{currentCustomer.id ? 'Edit Customer' : 'New Customer'}}</h2>
-                </div>
-                <div class="header-actions">
-                    <button class="btn-ghost" (click)="viewMode = 'list'">Cancel</button>
-                    <button class="btn-danger-ghost" *ngIf="currentCustomer.id" (click)="deleteCustomer(currentCustomer.id)">Delete</button>
-                    <button class="btn-premium" (click)="saveCustomer()">Save Changes</button>
-                </div>
+      <!-- KANBAN VIEW -->
+      <div class="kanban-area" *ngIf="viewMode === 'kanban' && !isLoading">
+        <div class="kanban-grid">
+          <div class="cust-card" *ngFor="let c of customers" (click)="viewCustomer(c)">
+            <div class="cust-avatar" [style.background]="getColor(c.name)">
+              {{getInitial(c.name)}}
             </div>
-
-            <div class="form-body">
-                <div class="form-card card-premium">
-                    <div class="form-section-title">Identity</div>
-                    <div class="identity-header">
-                        <div class="avatar-large">
-                            <img [src]="'https://ui-avatars.com/api/?name=' + currentCustomer.name + '&background=6366f1&color=fff&size=128'" alt="avatar">
-                        </div>
-                        <div class="identity-inputs">
-                            <div class="type-toggle">
-                                <button [class.active]="!currentCustomer.isCompany" (click)="currentCustomer.isCompany = false">Individual</button>
-                                <button [class.active]="currentCustomer.isCompany" (click)="currentCustomer.isCompany = true">Company</button>
-                            </div>
-                            <input type="text" class="input-hero" [(ngModel)]="currentCustomer.name" placeholder="Full Name or Company Name">
-                        </div>
-                    </div>
-
-                    <div class="form-grid-modern">
-                        <div class="input-group">
-                            <label>Customer Code</label>
-                            <input type="text" [(ngModel)]="currentCustomer.code" readonly placeholder="Auto-generated">
-                        </div>
-                        <div class="input-group">
-                            <label>Tax Identification</label>
-                            <input type="text" [(ngModel)]="currentCustomer.taxCode" placeholder="VAT / Tax Number">
-                        </div>
-                        <div class="input-group">
-                            <label>Email Address</label>
-                            <input type="email" [(ngModel)]="currentCustomer.email" placeholder="email@example.com">
-                        </div>
-                        <div class="input-group">
-                            <label>Phone Number</label>
-                            <input type="text" [(ngModel)]="currentCustomer.phone" placeholder="+84 ...">
-                        </div>
-                        <div class="input-group">
-                            <label>Sales Representative</label>
-                            <input type="text" [(ngModel)]="currentCustomer.salesPerson" placeholder="Assigned salesperson">
-                        </div>
-                        <div class="input-group">
-                            <label>Website</label>
-                            <input type="text" [(ngModel)]="currentCustomer.website" placeholder="https://...">
-                        </div>
-                    </div>
-
-                    <div class="input-group full">
-                        <label>Physical Address</label>
-                        <input type="text" [(ngModel)]="currentCustomer.address" placeholder="Street, District, City...">
-                    </div>
-
-                    <div class="input-group full">
-                        <label>Internal Notes</label>
-                        <textarea [(ngModel)]="currentCustomer.notes" rows="4" placeholder="Any additional information..."></textarea>
-                    </div>
-                </div>
+            <div class="cust-card-info">
+              <div class="cust-card-name">{{c.name}}</div>
+              <div class="cust-card-type">{{c.isCompany ? 'Công ty' : 'Cá nhân'}}</div>
+              <div class="cust-card-detail" *ngIf="c.salesPerson">
+                <span class="dot"></span> {{c.salesPerson}}
+              </div>
+              <div class="cust-card-detail" *ngIf="c.email">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                {{c.email}}
+              </div>
+              <div class="cust-card-detail" *ngIf="c.phone">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3.09 5.18 2 2 0 0 1 5.11 3h3a2 2 0 0 1 2 1.72c.13.81.36 1.61.68 2.36a2 2 0 0 1-.45 2.11L8.09 11.44a16 16 0 0 0 6.47 6.47l2.25-2.25a2 2 0 0 1 2.11-.45c.75.32 1.55.55 2.36.68A2 2 0 0 1 22 16.92z"/></svg>
+                {{c.phone}}
+              </div>
+              <div class="cust-card-detail" *ngIf="c.address">
+                📍 {{c.address}}
+              </div>
             </div>
+          </div>
         </div>
+        <div class="empty-state" *ngIf="customers.length === 0">Không tìm thấy khách hàng</div>
+      </div>
+
+      <!-- LIST VIEW -->
+      <div class="table-area" *ngIf="viewMode === 'list' && !isLoading">
+        <table class="odoo-table">
+          <thead>
+            <tr>
+              <th style="width:40px"><input type="checkbox" (change)="toggleSelectAll($event)" [checked]="isAllSelected()"></th>
+              <th>Tên</th>
+              <th>Loại</th>
+              <th>Mã KH</th>
+              <th>Email</th>
+              <th>SĐT</th>
+              <th>Nhân viên KD</th>
+              <th>Địa chỉ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of customers" (click)="viewCustomer(c)">
+              <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="selectedIds.has(c.id)" (change)="toggleSelect(c.id)"></td>
+              <td class="td-name">{{c.name}}</td>
+              <td><span class="td-badge" [class.green]="c.isCompany">{{c.isCompany ? 'Công ty' : 'Cá nhân'}}</span></td>
+              <td class="td-muted">{{c.code || '-'}}</td>
+              <td class="td-muted">{{c.email || '-'}}</td>
+              <td>{{c.phone || '-'}}</td>
+              <td>{{c.salesPerson || '-'}}</td>
+              <td class="td-muted">{{c.address || '-'}}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty-state" *ngIf="customers.length === 0">Không tìm thấy khách hàng</div>
+      </div>
+
+      <!-- FORM VIEW (Detail) -->
+      <div class="detail-view" *ngIf="viewMode === 'form'">
+        <div class="detail-container">
+          <div class="detail-header">
+            <button class="back-btn" (click)="viewMode = 'kanban'">← Quay lại</button>
+            <span class="detail-nav">/ Liên hệ / {{currentCustomer.name || 'Mới'}}</span>
+          </div>
+
+          <div class="detail-card">
+            <div class="detail-top">
+              <div class="detail-avatar" [style.background]="getColor(currentCustomer.name || 'N')">
+                {{getInitial(currentCustomer.name || 'N')}}
+              </div>
+              <div class="detail-title">
+                <input type="text" class="name-input" [(ngModel)]="currentCustomer.name" placeholder="Tên khách hàng">
+                <div class="type-toggle">
+                  <button [class.active]="!currentCustomer.isCompany" (click)="currentCustomer.isCompany = false">Cá nhân</button>
+                  <button [class.active]="currentCustomer.isCompany" (click)="currentCustomer.isCompany = true">Công ty</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-form-grid">
+              <div class="form-field">
+                <label>Mã khách hàng</label>
+                <input type="text" [(ngModel)]="currentCustomer.code" readonly placeholder="Tự tạo">
+              </div>
+              <div class="form-field">
+                <label>Mã số thuế</label>
+                <input type="text" [(ngModel)]="currentCustomer.taxCode" placeholder="MST">
+              </div>
+              <div class="form-field">
+                <label>Email</label>
+                <input type="email" [(ngModel)]="currentCustomer.email" placeholder="email@example.com">
+              </div>
+              <div class="form-field">
+                <label>Số điện thoại</label>
+                <input type="text" [(ngModel)]="currentCustomer.phone" placeholder="+84...">
+              </div>
+              <div class="form-field">
+                <label>Nhân viên kinh doanh</label>
+                <input type="text" [(ngModel)]="currentCustomer.salesPerson" placeholder="Người phụ trách">
+              </div>
+              <div class="form-field">
+                <label>Website</label>
+                <input type="text" [(ngModel)]="currentCustomer.website" placeholder="https://...">
+              </div>
+            </div>
+
+            <div class="form-field full">
+              <label>Địa chỉ</label>
+              <input type="text" [(ngModel)]="currentCustomer.address" placeholder="Đường, Quận, Thành phố...">
+            </div>
+            <div class="form-field full">
+              <label>Ghi chú</label>
+              <textarea [(ngModel)]="currentCustomer.notes" rows="3" placeholder="Ghi chú nội bộ..."></textarea>
+            </div>
+
+            <div class="detail-actions">
+              <button class="btn-save" (click)="saveCustomer()">💾 Lưu</button>
+              <button class="btn-cancel" (click)="viewMode = 'kanban'">Hủy</button>
+              <button class="btn-danger" *ngIf="currentCustomer.id" (click)="deleteCustomer(currentCustomer.id)">🗑️ Xóa</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="loading-overlay" *ngIf="isLoading"><div class="spinner"></div></div>
     </div>
     `,
-  styles: [`
-    .premium-view { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); min-height: 100vh; padding: 20px; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    styles: [`
+      .cust-module { display: flex; flex-direction: column; height: 100%; font-family: 'Inter', sans-serif; background: #F0F0F0; }
 
-    /* Action Bar - Elite */
-    .action-bar { 
-        display: flex; justify-content: space-between; align-items: center; 
-        margin-bottom: 40px; padding: 16px 24px; background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; backdrop-filter: blur(20px);
-    }
-    .bar-left { display: flex; gap: 14px; }
-    
-    .btn-premium { 
-        background: var(--primary); color: #fff; border: none; padding: 12px 24px;
-        border-radius: 14px; font-weight: 800; cursor: pointer; transition: all 0.3s;
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
-    .btn-premium:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 16px rgba(99, 102, 241, 0.4); }
+      .cust-toolbar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 16px; background: #fff; border-bottom: 1px solid #DEE2E6; flex-shrink: 0; gap: 12px;
+      }
+      .toolbar-left { display: flex; align-items: center; gap: 8px; }
+      .toolbar-right { display: flex; align-items: center; gap: 8px; }
+      .search-input {
+        padding: 6px 12px; border: 1px solid #CED4DA; border-radius: 4px;
+        font-size: 13px; width: 220px; outline: none; font-family: 'Inter', sans-serif;
+      }
+      .search-input:focus { border-color: var(--odoo-purple, #714B67); box-shadow: 0 0 0 2px rgba(113,75,103,0.1); }
+      .toolbar-info { font-size: 12px; color: #6C757D; white-space: nowrap; }
 
-    .btn-ghost { 
-        background: rgba(255,255,255,0.05); color: #fff; border: 1px solid rgba(255,255,255,0.1);
-        padding: 12px 24px; border-radius: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s;
-    }
-    .btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); }
+      .view-toggle { display: flex; border: 1px solid #CED4DA; border-radius: 4px; overflow: hidden; }
+      .view-btn { padding: 5px 10px; border: none; background: #fff; cursor: pointer; font-size: 13px; color: #6C757D; }
+      .view-btn:not(:last-child) { border-right: 1px solid #CED4DA; }
+      .view-btn.active { background: var(--odoo-purple, #714B67); color: #fff; }
+      .view-btn:hover:not(.active) { background: #F4F6F8; }
 
-    .btn-danger-ghost { 
-        background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);
-        padding: 12px 24px; border-radius: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s;
-    }
-    .btn-danger-ghost:hover { background: rgba(239, 68, 68, 0.2); transform: scale(1.02); }
+      .btn-odoo { padding: 6px 14px; background: var(--odoo-purple, #714B67); color: #fff; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-odoo:hover { background: var(--odoo-purple-dark, #5B3D54); }
+      .btn-import { padding: 6px 14px; background: #fff; color: #495057; border: 1px solid #CED4DA; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-import:hover { background: #F4F6F8; }
+      .btn-delete { padding: 6px 14px; background: #DC3545; color: #fff; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-delete:hover { background: #C82333; }
 
-    .search-input-wrapper { position: relative; }
-    .search-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 18px; }
-    .search-input-wrapper input { 
-        padding: 14px 20px 14px 52px; border-radius: 16px; border: 1.5px solid rgba(255,255,255,0.1);
-        width: 360px; outline: none; transition: all 0.3s; background: rgba(0,0,0,0.2); color: #fff;
-    }
-    .search-input-wrapper input:focus { border-color: var(--primary); background: rgba(0,0,0,0.3); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
+      /* Kanban */
+      .kanban-area { flex: 1; overflow-y: auto; padding: 16px; }
+      .kanban-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+      .cust-card {
+        background: #fff; border: 1px solid #DEE2E6; border-radius: 6px;
+        padding: 14px; display: flex; gap: 14px; cursor: pointer; transition: all 0.15s;
+      }
+      .cust-card:hover { border-color: var(--odoo-purple, #714B67); box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+      .cust-avatar {
+        width: 64px; height: 64px; border-radius: 4px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 26px; font-weight: 800; color: #fff; font-family: 'Outfit', sans-serif;
+      }
+      .cust-card-info { flex: 1; min-width: 0; }
+      .cust-card-name { font-size: 14px; font-weight: 700; color: #212529; margin-bottom: 2px; }
+      .cust-card-type { font-size: 11px; color: #27AE60; font-weight: 600; margin-bottom: 4px; }
+      .cust-card-detail { font-size: 11px; color: #6C757D; display: flex; align-items: center; gap: 4px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dot { width: 6px; height: 6px; background: var(--odoo-purple, #714B67); border-radius: 50%; flex-shrink: 0; }
 
-    /* Grid - High Intensity */
-    .selection-header { margin-bottom: 24px; display: flex; align-items: center; justify-content: flex-end; }
-    .customer-grid { 
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); 
-        gap: 32px; 
-    }
-    .customer-card-premium { 
-        background: rgba(255,255,255,0.02); backdrop-filter: blur(30px); border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 32px; padding: 32px; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        position: relative; overflow: hidden;
-    }
-    .customer-card-premium:hover { transform: translateY(-8px) scale(1.02); box-shadow: 0 30px 60px rgba(0,0,0,0.4); border-color: var(--primary); }
-    .customer-card-premium.selected { background: rgba(99, 102, 241, 0.1); border-color: var(--primary); }
+      /* Table */
+      .table-area { flex: 1; overflow: auto; }
+      .odoo-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+      .odoo-table thead { position: sticky; top: 0; z-index: 5; }
+      .odoo-table th { background: #F8F9FA; color: #495057; font-weight: 600; padding: 10px 14px; text-align: left; border-bottom: 2px solid #DEE2E6; font-size: 12px; }
+      .odoo-table td { padding: 10px 14px; border-bottom: 1px solid #E9ECEF; color: #212529; }
+      .odoo-table tr:hover td { background: #F8F9FA; }
+      .odoo-table tbody tr { cursor: pointer; }
+      .td-name { font-weight: 600; }
+      .td-muted { color: #6C757D; }
+      .td-badge { font-size: 11px; padding: 2px 8px; border-radius: 3px; font-weight: 600; background: #E9ECEF; color: #495057; }
+      .td-badge.green { background: #D4EDDA; color: #155724; }
 
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
-    .customer-type { font-size: 10px; font-weight: 900; text-transform: uppercase; padding: 5px 12px; border-radius: 20px; background: rgba(255,255,255,0.05); color: #94a3b8; letter-spacing: 1px; }
-    .customer-type.company { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+      /* Detail View */
+      .detail-view { flex: 1; overflow-y: auto; background: #F0F0F0; }
+      .detail-container { max-width: 900px; margin: 0 auto; padding: 16px; }
+      .detail-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+      .back-btn { background: none; border: 1px solid #CED4DA; border-radius: 4px; padding: 5px 12px; font-size: 13px; cursor: pointer; color: #495057; font-family: 'Inter', sans-serif; }
+      .back-btn:hover { background: #F4F6F8; }
+      .detail-nav { font-size: 12px; color: #ADB5BD; }
 
-    .card-body { display: flex; align-items: center; gap: 20px; margin-bottom: 28px; }
-    .avatar-wrapper img { width: 68px; height: 68px; border-radius: 22px; object-fit: cover; border: 2px solid rgba(255,255,255,0.1); }
-    .customer-name { font-family: 'Outfit'; font-size: 22px; font-weight: 800; color: #fff; margin: 0; letter-spacing: -0.5px; }
-    .customer-kd { font-size: 13px; color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-    .dot { width: 6px; height: 6px; background: var(--primary); border-radius: 50%; box-shadow: 0 0 8px var(--primary); }
+      .detail-card { background: #fff; border: 1px solid #DEE2E6; border-radius: 6px; padding: 24px; }
+      .detail-top { display: flex; gap: 24px; margin-bottom: 24px; }
+      .detail-avatar {
+        width: 90px; height: 90px; border-radius: 6px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 36px; font-weight: 800; color: #fff; font-family: 'Outfit', sans-serif;
+      }
+      .detail-title { flex: 1; }
+      .name-input {
+        width: 100%; border: none; border-bottom: 2px solid #E9ECEF; font-size: 22px;
+        font-weight: 700; padding: 6px 0; outline: none; font-family: 'Outfit', sans-serif; color: #212529;
+      }
+      .name-input:focus { border-bottom-color: var(--odoo-purple, #714B67); }
+      .type-toggle { display: flex; margin-top: 8px; gap: 0; border: 1px solid #CED4DA; border-radius: 4px; overflow: hidden; width: fit-content; }
+      .type-toggle button { border: none; padding: 4px 14px; font-size: 12px; cursor: pointer; background: #fff; color: #6C757D; font-family: 'Inter', sans-serif; }
+      .type-toggle button.active { background: var(--odoo-purple, #714B67); color: #fff; }
 
-    .card-footer { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 24px; display: grid; gap: 12px; }
-    .footer-item { font-size: 14px; color: var(--text-muted); display: flex; align-items: center; gap: 10px; font-weight: 500; }
-    .footer-item .icon { font-size: 16px; opacity: 0.8; }
+      .detail-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+      .form-field { display: flex; flex-direction: column; gap: 4px; }
+      .form-field.full { grid-column: 1 / -1; margin-top: 8px; }
+      .form-field label { font-size: 12px; font-weight: 600; color: #6C757D; }
+      .form-field input, .form-field textarea {
+        padding: 7px 10px; border: 1px solid #CED4DA; border-radius: 4px;
+        font-size: 13px; font-family: 'Inter', sans-serif; color: #212529; outline: none;
+      }
+      .form-field input:focus, .form-field textarea:focus { border-color: var(--odoo-purple, #714B67); box-shadow: 0 0 0 2px rgba(113,75,103,0.1); }
 
-    /* Checkbox - Sharp */
-    .custom-checkbox { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; font-weight: 700; color: var(--text-muted); transition: color 0.2s; }
-    .custom-checkbox:hover { color: #fff; }
-    .custom-checkbox input { display: none; }
-    .checkmark { width: 22px; height: 22px; border: 2px solid rgba(255,255,255,0.2); border-radius: 8px; position: relative; transition: all 0.3s; background: rgba(0,0,0,0.2); }
-    .custom-checkbox input:checked + .checkmark { background: var(--primary); border-color: var(--primary); box-shadow: 0 0 10px rgba(99, 102, 241, 0.4); }
-    .checkmark:after { content: "✓"; position: absolute; color: #fff; font-size: 16px; left: 4px; top: -1px; display: none; }
-    .custom-checkbox input:checked + .checkmark:after { display: block; }
+      .detail-actions { display: flex; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #E9ECEF; }
+      .btn-save { padding: 7px 20px; background: var(--odoo-purple, #714B67); color: #fff; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-save:hover { background: var(--odoo-purple-dark, #5B3D54); }
+      .btn-cancel { padding: 7px 20px; background: #fff; color: #495057; border: 1px solid #CED4DA; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; }
+      .btn-cancel:hover { background: #F4F6F8; }
+      .btn-danger { padding: 7px 20px; background: #DC3545; color: #fff; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; margin-left: auto; font-family: 'Inter', sans-serif; }
+      .btn-danger:hover { background: #C82333; }
 
-    /* Form - Luxury */
-    .form-container { max-width: 1000px; margin: 0 auto; padding-top: 20px; }
-    .form-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 48px; }
-    .header-left { display: flex; align-items: center; gap: 20px; }
-    .header-left h2 { font-family: 'Outfit'; font-size: 32px; font-weight: 800; color: #fff; }
-    .btn-icon-only { width: 52px; height: 52px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #fff; cursor: pointer; font-size: 20px; transition: all 0.2s; }
-    .btn-icon-only:hover { background: rgba(255,255,255,0.1); transform: translateX(-4px); }
-    
-    .form-card { padding: 56px; background: rgba(255,255,255,0.02); backdrop-filter: blur(40px); border: 1px solid rgba(255,255,255,0.06); border-radius: 40px; }
-    .form-section-title { font-family: 'Outfit'; font-size: 12px; font-weight: 900; text-transform: uppercase; color: var(--primary); letter-spacing: 2.5px; margin-bottom: 40px; opacity: 0.8; }
-    
-    .identity-header { display: flex; gap: 48px; margin-bottom: 56px; }
-    .avatar-large img { width: 128px; height: 128px; border-radius: 32px; border: 4px solid rgba(255,255,255,0.05); box-shadow: var(--shadow-xl); }
-    .identity-inputs { flex: 1; }
-    .type-toggle { display: flex; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 16px; width: fit-content; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.05); }
-    .type-toggle button { border: none; padding: 8px 24px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; background: transparent; color: #94a3b8; transition: all 0.2s; }
-    .type-toggle button.active { background: #fff; color: #000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-    .input-hero { width: 100%; border: none; border-bottom: 3px solid rgba(255,255,255,0.1); font-size: 36px; font-weight: 800; outline: none; padding: 12px 0; background: transparent; color: #fff; font-family: 'Outfit'; }
-    .input-hero:focus { border-color: var(--primary); }
-
-    .form-grid-modern { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; }
-    .input-group { display: flex; flex-direction: column; gap: 10px; }
-    .input-group.full { grid-column: 1 / -1; margin-bottom: 20px; }
-    .input-group label { font-size: 13px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; padding-left: 4px; }
-    .input-group input, .input-group textarea { 
-        padding: 16px 20px; border-radius: 20px; border: 1.5px solid rgba(255,255,255,0.08);
-        font-size: 15px; outline: none; transition: all 0.3s; background: rgba(0,0,0,0.2); color: #fff; font-weight: 500;
-    }
-    .input-group input:focus, .input-group textarea:focus { border-color: var(--primary); background: rgba(0,0,0,0.3); box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.1); }
-    
-    .loading-overlay { padding: 100px; text-align: center; }
-    .spinner { width: 56px; height: 56px; border: 5px solid rgba(255,255,255,0.1); border-top: 5px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; filter: drop-shadow(0 0 10px var(--primary)); }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  `]
+      .empty-state { text-align: center; padding: 60px 20px; color: #ADB5BD; font-size: 14px; }
+      .loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.7); }
+      .spinner { width: 40px; height: 40px; border: 4px solid #E9ECEF; border-top-color: var(--odoo-purple, #714B67); border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    `]
 })
 export class CustomersComponent implements OnInit {
-    viewMode: ViewMode = 'list';
+    viewMode: ViewMode = 'kanban';
     customers: any[] = [];
     currentCustomer: any = this.resetCustomer();
     isLoading = false;
     searchQuery = '';
     selectedIds = new Set<number>();
 
-    constructor(
-        private api: ApiService,
-        private cdr: ChangeDetectorRef,
-        private zone: NgZone
-    ) {}
+    constructor(private api: ApiService, private cdr: ChangeDetectorRef, private zone: NgZone) {}
 
     @ViewChild('fileInput') fileInput!: any;
 
-    triggerImport() {
-        this.fileInput.nativeElement.click();
+    ngOnInit() { this.loadCustomers(); }
+
+    getInitial(name: string): string { return name ? name.charAt(0).toUpperCase() : '?'; }
+    getColor(name: string): string {
+        let h = 0;
+        for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+        return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
     }
+
+    resetCustomer() {
+        return { name: '', code: '', taxCode: '', phone: '', email: '', address: '', website: '', salesPerson: '', isCompany: true, notes: '' };
+    }
+
+    triggerImport() { this.fileInput.nativeElement.click(); }
 
     onFileSelected(event: any) {
         const file: File = event.target.files[0];
@@ -289,132 +312,59 @@ export class CustomersComponent implements OnInit {
                     const result = res.data;
                     alert(`Import thành công!\n- Đã thêm: ${result.imported}\n- Bỏ qua: ${result.skipped}\n- Lỗi: ${result.errors.length}`);
                     this.loadCustomers();
-                    event.target.value = ''; // Reset input
+                    event.target.value = '';
                 },
-                error: (err) => {
-                    alert(err.error?.message || 'Lỗi khi import file');
-                    this.isLoading = false;
-                    event.target.value = ''; // Reset input
-                }
+                error: (err) => { alert(err.error?.message || 'Lỗi khi import'); this.isLoading = false; event.target.value = ''; }
             });
         }
-    }
-
-    ngOnInit() {
-        console.log('CustomersComponent loaded');
-        this.loadCustomers();
-    }
-
-    resetCustomer() {
-        return {
-            name: '',
-            code: '',
-            taxCode: '',
-            phone: '',
-            email: '',
-            address: '',
-            website: '',
-            salesPerson: '',
-            isCompany: true,
-            notes: ''
-        };
-    }
-
-    toggleSelect(id: number) {
-        if (this.selectedIds.has(id)) this.selectedIds.delete(id);
-        else this.selectedIds.add(id);
-    }
-
-    toggleSelectAll(event: any) {
-        if (event.target.checked) {
-            this.customers.forEach(c => this.selectedIds.add(c.id));
-        } else {
-            this.selectedIds.clear();
-        }
-    }
-
-    isAllSelected() {
-        return this.customers.length > 0 && this.selectedIds.size === this.customers.length;
-    }
-
-    deleteSelected() {
-        if (!confirm(`Bạn có chắc chắn muốn xóa ${this.selectedIds.size} khách hàng đã chọn?`)) return;
-        
-        this.isLoading = true;
-        this.api.bulkDeleteCustomers(Array.from(this.selectedIds)).subscribe({
-            next: () => {
-                this.selectedIds.clear();
-                this.loadCustomers();
-            },
-            error: (err) => {
-                alert(err.error?.message || 'Lỗi khi xóa hàng loạt');
-                this.isLoading = false;
-            }
-        });
-    }
-
-    deleteCustomer(id: number) {
-        if (!confirm('Bạn có chắc chắn muốn xóa khách hàng này?')) return;
-        
-        this.api.deleteCustomer(id).subscribe({
-            next: () => {
-                this.viewMode = 'list';
-                this.loadCustomers();
-            },
-            error: (err) => alert(err.error?.message || 'Lỗi khi xóa khách hàng')
-        });
     }
 
     loadCustomers() {
         this.isLoading = true;
         this.api.getCustomers().subscribe({
-            next: (res) => {
-                this.zone.run(() => {
-                    this.customers = res.data || [];
-                    this.isLoading = false;
-                    this.cdr.detectChanges();
-                });
-            },
+            next: (res) => { this.zone.run(() => { this.customers = res.data || []; this.isLoading = false; this.cdr.detectChanges(); }); },
             error: () => this.isLoading = false
-        });
-    }
-
-    openCreateForm() {
-        this.currentCustomer = this.resetCustomer();
-        this.viewMode = 'form';
-    }
-
-    viewCustomer(customer: any) {
-        this.currentCustomer = { ...customer };
-        this.viewMode = 'form';
-    }
-
-    saveCustomer() {
-        if (!this.currentCustomer.name) {
-            alert('Vui lòng nhập tên khách hàng');
-            return;
-        }
-
-        const request = this.currentCustomer.id 
-            ? this.api.updateCustomer(this.currentCustomer.id, this.currentCustomer)
-            : this.api.createCustomer(this.currentCustomer);
-
-        request.subscribe({
-            next: () => {
-                this.viewMode = 'list';
-                this.loadCustomers();
-            },
-            error: (err) => alert(err.error?.message || 'Lỗi lưu khách hàng')
         });
     }
 
     onSearch() {
         if (this.searchQuery.length > 1) {
-            this.api.searchCustomers(this.searchQuery).subscribe(res => {
-                this.customers = res.data || [];
-            });
-        } else if (this.searchQuery.length === 0) {
-            this.loadCustomers();
-        }
+            this.api.searchCustomers(this.searchQuery).subscribe(res => this.customers = res.data || []);
+        } else if (this.searchQuery.length === 0) { this.loadCustomers(); }
+    }
+
+    toggleSelect(id: number) { this.selectedIds.has(id) ? this.selectedIds.delete(id) : this.selectedIds.add(id); }
+    toggleSelectAll(event: any) { event.target.checked ? this.customers.forEach(c => this.selectedIds.add(c.id)) : this.selectedIds.clear(); }
+    isAllSelected() { return this.customers.length > 0 && this.selectedIds.size === this.customers.length; }
+
+    deleteSelected() {
+        if (!confirm(`Xóa ${this.selectedIds.size} khách hàng đã chọn?`)) return;
+        this.isLoading = true;
+        this.api.bulkDeleteCustomers(Array.from(this.selectedIds)).subscribe({
+            next: () => { this.selectedIds.clear(); this.loadCustomers(); },
+            error: (err) => { alert(err.error?.message || 'Lỗi xóa'); this.isLoading = false; }
+        });
+    }
+
+    openCreateForm() { this.currentCustomer = this.resetCustomer(); this.viewMode = 'form'; }
+    viewCustomer(c: any) { this.currentCustomer = { ...c }; this.viewMode = 'form'; }
+
+    saveCustomer() {
+        if (!this.currentCustomer.name) { alert('Vui lòng nhập tên khách hàng'); return; }
+        const req = this.currentCustomer.id
+            ? this.api.updateCustomer(this.currentCustomer.id, this.currentCustomer)
+            : this.api.createCustomer(this.currentCustomer);
+        req.subscribe({
+            next: () => { this.viewMode = 'kanban'; this.loadCustomers(); },
+            error: (err) => alert(err.error?.message || 'Lỗi lưu')
+        });
+    }
+
+    deleteCustomer(id: number) {
+        if (!confirm('Xóa khách hàng này?')) return;
+        this.api.deleteCustomer(id).subscribe({
+            next: () => { this.viewMode = 'kanban'; this.loadCustomers(); },
+            error: (err) => alert(err.error?.message || 'Lỗi xóa')
+        });
     }
 }
