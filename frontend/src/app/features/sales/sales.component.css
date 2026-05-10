@@ -72,7 +72,12 @@
 
 /* Detail Card */
 .detail-card { background: #fff; border: 1px solid #DEE2E6; border-radius: 6px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-.order-code { font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 700; color: #212529; margin-bottom: 24px; }
+.hero-title-area { margin-bottom: 24px; }
+.order-code-input {
+  font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 700; color: #212529;
+  border: none; border-bottom: 2px solid transparent; outline: none; width: 100%; padding: 4px 0;
+}
+.order-code-input:focus { border-bottom-color: #714B67; }
 
 .form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 32px; margin-bottom: 20px; }
 .form-col { display: flex; flex-direction: column; gap: 4px; }

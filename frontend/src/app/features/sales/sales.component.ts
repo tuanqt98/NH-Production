@@ -6,14 +6,14 @@ import { debounceTime, switchMap } from 'rxjs/operators';
 import { ApiService } from '../../core/services/api.service';
 
 type ViewMode = 'list' | 'form';
-const STATUSES = ['QUOTATION', 'PRICE_REVIEW', 'CONFIRMED', 'SO_CONFIRM', 'SALES_ORDER', 'PRODUCTION_DONE'];
+const STATUSES = ['QUOTATION', 'PRICE_PROPOSAL', 'AWAITING_CONFIRM', 'CONFIRMED', 'SALES_ORDER', 'COMPLETED'];
 const STATUS_LABELS: Record<string, string> = {
   'QUOTATION': 'Báo giá',
-  'PRICE_REVIEW': 'Đề nghị duyệt giá',
-  'CONFIRMED': 'Chờ xác nhận',
-  'SO_CONFIRM': 'Xác nhận đơn ĐH',
+  'PRICE_PROPOSAL': 'Đề nghị duyệt giá',
+  'AWAITING_CONFIRM': 'Chờ xác nhận',
+  'CONFIRMED': 'Xác nhận đơn ĐH',
   'SALES_ORDER': 'Đơn bán hàng',
-  'PRODUCTION_DONE': 'Hoàn tất sản xuất'
+  'COMPLETED': 'Hoàn tất sản xuất'
 };
 
 @Component({
@@ -58,26 +58,35 @@ export class SalesOdooComponent implements OnInit, OnDestroy {
     ngOnDestroy() { this.searchSub?.unsubscribe(); }
 
     resetOrder() {
+        const today = new Date();
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        
         return { 
-            orderCode: '', 
+            orderCode: 'S' + Math.floor(Math.random() * 100000), 
             customer: '', 
             customerId: null, 
-            productCode: '', 
+            productCode: 'NEW-PROD', 
             productName: '',
-            plannedQty: 0, 
+            plannedQty: 1, 
             deliveredQty: 0,
-            dueDate: '', 
+            dueDate: nextWeek.toISOString().split('T')[0], 
             status: 'QUOTATION', 
             salesPerson: 'Lê Thị Hoài Linh', 
             notes: '',
-            unitPrice: 200, 
-            costPrice: 157.81,
+            unitPrice: 0, 
+            costPrice: 0,
             taxRate: 8,
             level: 3,
             isSample: false,
             sampleNote: '',
             totalCost: 0,
-            confirmedAt: new Date().toISOString()
+            confirmedAt: today.toISOString(),
+            operations: [
+                { name: 'In', sequence: 1 },
+                { name: 'Bế', sequence: 2 },
+                { name: 'Thành phẩm', sequence: 3 }
+            ]
         };
     }
 
@@ -93,10 +102,31 @@ export class SalesOdooComponent implements OnInit, OnDestroy {
     viewOrder(order: any) { this.currentOrder = { ...order }; this.viewMode = 'form'; this.detailTab = 'lines'; }
 
     saveOrder() {
+        if (!this.currentOrder.customer) { alert('Vui lòng chọn khách hàng'); return; }
+        if (!this.currentOrder.orderCode) { alert('Vui lòng nhập mã đơn hàng'); return; }
+        
+        // Ensure numbers
+        this.currentOrder.plannedQty = Number(this.currentOrder.plannedQty) || 1;
+        this.currentOrder.unitPrice = Number(this.currentOrder.unitPrice) || 0;
+        this.currentOrder.costPrice = Number(this.currentOrder.costPrice) || 0;
+
         const req = this.currentOrder.id
             ? this.api.updateOrder(this.currentOrder.id, this.currentOrder)
             : this.api.createOrder(this.currentOrder);
-        req.subscribe({ next: () => { this.viewMode = 'list'; this.loadOrders(); }, error: (err: any) => alert(err.error?.message || 'Lỗi') });
+            
+        this.isLoading = true;
+        req.subscribe({ 
+            next: (res) => { 
+                console.log('Save success:', res);
+                this.viewMode = 'list'; 
+                this.loadOrders(); 
+            }, 
+            error: (err: any) => {
+                this.isLoading = false;
+                console.error('Save error:', err);
+                alert('Lỗi: ' + (err.error?.message || 'Không thể lưu đơn hàng. Vui lòng kiểm tra lại dữ liệu.'));
+            } 
+        });
     }
 
     confirmOrder() {}

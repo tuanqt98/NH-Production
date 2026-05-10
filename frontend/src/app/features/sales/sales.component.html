@@ -78,7 +78,9 @@
         <!-- Main Form Content -->
         <div class="detail-main">
           <div class="detail-card">
-            <h1 class="order-code">{{currentOrder.orderCode || 'Báo giá mới'}}</h1>
+            <div class="hero-title-area">
+              <input type="text" class="order-code-input" [(ngModel)]="currentOrder.orderCode" placeholder="Số đơn hàng (VD: S10721)">
+            </div>
 
             <div class="form-2col">
               <div class="form-col">
@@ -168,7 +170,8 @@
               <table class="lines-table">
                 <thead>
                   <tr>
-                    <th class="th-product">Sản phẩm</th>
+                    <th>Mã sản phẩm</th>
+                    <th class="th-product">Tên sản phẩm</th>
                     <th>Số lượng</th>
                     <th>Đã giao</th>
                     <th>Đã xuất hóa...</th>
@@ -181,6 +184,7 @@
                 </thead>
                 <tbody>
                   <tr>
+                    <td><input type="text" [(ngModel)]="currentOrder.productCode" placeholder="Mã SP" class="line-input"></td>
                     <td><input type="text" [(ngModel)]="currentOrder.productName" placeholder="Tên sản phẩm" class="line-input full"></td>
                     <td><input type="number" [(ngModel)]="currentOrder.plannedQty" class="line-input num"></td>
                     <td><div class="value">0,00</div></td>
